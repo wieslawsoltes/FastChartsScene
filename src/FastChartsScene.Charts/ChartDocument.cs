@@ -1,0 +1,163 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using FastChartsScene.Core;
+using FastChartsScene.Data;
+
+namespace FastChartsScene.Charts;
+
+public enum AnnotationKind { Text, HorizontalLine, VerticalLine, Rectangle }
+public sealed class Annotation : ObservableModel
+{
+    private string _text="Annotation",_yAxisId="y";
+    private AnnotationKind _kind;
+    private double _x,_y,_x2=1,_y2=1;
+    private ColorRgba _color=Palette.Series[2];
+    public string Text { get=>_text; set=>Set(ref _text,value??""); }
+    public string YAxisId { get=>_yAxisId; set=>Set(ref _yAxisId,value); }
+    public AnnotationKind Kind { get=>_kind; set=>Set(ref _kind,value); }
+    public double X { get=>_x; set { Validate(value); Set(ref _x,value); } }
+    public double Y { get=>_y; set { Validate(value); Set(ref _y,value); } }
+    public double X2 { get=>_x2; set { Validate(value); Set(ref _x2,value); } }
+    public double Y2 { get=>_y2; set { Validate(value); Set(ref _y2,value); } }
+    public ColorRgba Color { get=>_color; set=>Set(ref _color,value); }
+    private static void Validate(double v) { if(!double.IsFinite(v)) throw new ArgumentOutOfRangeException(nameof(v)); }
+}
+
+public sealed record ChartSegment(string Name,double Weight,string[] AxisIds);
+public sealed class Camera3D : ObservableModel
+{
+    private double _azimuth=38,_elevation=28,_distance=4.5;
+    private bool _orthographic;
+    public double Azimuth { get=>_azimuth; set { if(!double.IsFinite(value)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _azimuth,value%360); } }
+    public double Elevation { get=>_elevation; set { if(!double.IsFinite(value)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _elevation,Math.Clamp(value,-85,85)); } }
+    public double Distance { get=>_distance; set { if(!double.IsFinite(value)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _distance,Math.Clamp(value,1.5,30)); } }
+    public bool Orthographic { get=>_orthographic; set=>Set(ref _orthographic,value); }
+    public void Reset() { Azimuth=38; Elevation=28; Distance=4.5; Orthographic=false; }
+}
+
+/// <summary>Renderer-independent chart model with coalesced change notifications and stable axis identities.</summary>
+public sealed class ChartDocument : ObservableModel, IDisposable
+{
+    private string _title="FastChartsScene",_subtitle="";
+    private ChartView _view;
+    private ChartTheme _theme=ChartTheme.Dark;
+    private AxisLayout _axisLayout;
+    private bool _showGrid=true,_showLegend=true;
+    private int _updateDepth;
+    private bool _dirty,_disposed;
+    private readonly HashSet<ObservableModel> _observed=[];
+    public event EventHandler? Changed;
+    public long Revision { get; private set; }
+    public string Title { get=>_title; set=>Set(ref _title,value??""); }
+    public string Subtitle { get=>_subtitle; set=>Set(ref _subtitle,value??""); }
+    public ChartView View { get=>_view; set=>Set(ref _view,value); }
+    public ChartTheme Theme { get=>_theme; set { ArgumentNullException.ThrowIfNull(value); Set(ref _theme,value); } }
+    public AxisLayout AxisLayout { get=>_axisLayout; set=>Set(ref _axisLayout,value); }
+    public bool ShowGrid { get=>_showGrid; set=>Set(ref _showGrid,value); }
+    public bool ShowLegend { get=>_showLegend; set=>Set(ref _showLegend,value); }
+    public ObservableCollection<Axis> XAxes { get; }=[new("x") { Title="X axis" }];
+    public ObservableCollection<Axis> YAxes { get; }=[new("y") { Title="Y axis",Range=new(-1,1) }];
+    public Axis ZAxis { get; }=new("z") { Title="Z axis",Range=new(-1,1) };
+    public ObservableCollection<Series> Series { get; }=[];
+    public ObservableCollection<Annotation> Annotations { get; }=[];
+    public ObservableCollection<ChartSegment> Segments { get; }=[];
+    public Camera3D Camera { get; }=new();
+    public Axis XAxis=>XAxes[0];
+    public Axis YAxis=>YAxes[0];
+    public long TotalPoints=>Series.Sum(s=>(long)s.PointCount);
+    public ChartDocument()
+    {
+        PropertyChanged+=ModelChanged;
+        XAxes.CollectionChanged+=(_,_)=>Rewire(); YAxes.CollectionChanged+=(_,_)=>Rewire();
+        Series.CollectionChanged+=(_,_)=>Rewire(); Annotations.CollectionChanged+=(_,_)=>Rewire(); Segments.CollectionChanged+=(_,_)=>Invalidate();
+        Rewire();
+    }
+    private void ModelChanged(object? sender,PropertyChangedEventArgs e)=>Invalidate();
+    private void Rewire()
+    {
+        var current=XAxes.Cast<ObservableModel>().Concat(YAxes).Concat(Series).Concat(Annotations).Append(Camera).Append(ZAxis).ToHashSet();
+        foreach(var item in _observed.Except(current)) item.PropertyChanged-=ModelChanged;
+        foreach(var item in current.Except(_observed)) item.PropertyChanged+=ModelChanged;
+        _observed.Clear(); _observed.UnionWith(current); Invalidate();
+    }
+    public Axis FindX(string id)=>XAxes.FirstOrDefault(a=>a.Id==id)??throw new InvalidOperationException($"Unknown X axis '{id}'.");
+    public Axis FindY(string id)=>YAxes.FirstOrDefault(a=>a.Id==id)??throw new InvalidOperationException($"Unknown Y axis '{id}'.");
+    public IDisposable BeginUpdate()
+    {
+        ObjectDisposedException.ThrowIf(_disposed,this); _updateDepth++; return new UpdateScope(this);
+    }
+    private sealed class UpdateScope(ChartDocument owner) : IDisposable
+    {
+        private ChartDocument? _owner=owner;
+        public void Dispose()
+        {
+            var d=Interlocked.Exchange(ref _owner,null); if(d is null) return;
+            if(--d._updateDepth==0&&d._dirty) d.Invalidate();
+        }
+    }
+    public void Invalidate()
+    {
+        if(_disposed) return;
+        if(_updateDepth>0) { _dirty=true; return; }
+        _dirty=false; Revision++; Changed?.Invoke(this,EventArgs.Empty);
+    }
+    public IReadOnlyList<string> Validate()
+    {
+        List<string> errors=[];
+        if(XAxes.Count==0||YAxes.Count==0) errors.Add("At least one X and Y axis are required.");
+        if(XAxes.GroupBy(a=>a.Id).Any(g=>g.Count()>1)||YAxes.GroupBy(a=>a.Id).Any(g=>g.Count()>1)) errors.Add("Axis IDs must be unique within each dimension.");
+        foreach(var s in Series)
+        {
+            if(!XAxes.Any(a=>a.Id==s.XAxisId)||!YAxes.Any(a=>a.Id==s.YAxisId)) errors.Add($"{s.Title}: missing axis binding.");
+            if(s is BandSeries b&&(b.Data.Count!=b.Upper.Count||Enumerable.Range(0,b.Data.Count).Any(i=>b.Data.X(i)!=b.Upper.X(i)))) errors.Add($"{s.Title}: band X coordinates must match.");
+            if(s is ErrorBarSeries e&&(e.Data.Count!=e.LowerErrors.Length||e.Data.Count!=e.UpperErrors.Length)) errors.Add($"{s.Title}: error lengths must match data.");
+        }
+        if(AxisLayout==AxisLayout.Segmented)
+        {
+            if(Segments.Count==0||Segments.Any(s=>!double.IsFinite(s.Weight)||s.Weight<=0)) errors.Add("Segment weights must be finite and positive.");
+            foreach(var a in YAxes) if(Segments.Count(s=>s.AxisIds.Contains(a.Id))!=1) errors.Add($"Axis {a.Id} must belong to exactly one segment.");
+        }
+        return errors;
+    }
+    public void AutoFit()
+    {
+        using var update=BeginUpdate();
+        foreach(var x in XAxes) FitAxis(x,true);
+        foreach(var y in YAxes) FitAxis(y,false);
+    }
+    private void FitAxis(Axis axis,bool horizontal)
+    {
+        var min=double.PositiveInfinity; var max=double.NegativeInfinity;
+        void Include(double v) { if(double.IsFinite(v)&&(axis.Scale!=AxisScale.Logarithmic||v>0)) { min=Math.Min(min,v); max=Math.Max(max,v); } }
+        foreach(var s in Series.Where(s=>s.Visible&&(horizontal?s.XAxisId:s.YAxisId)==axis.Id))
+        {
+            if(s is DataSeries d)
+            {
+                for(var i=0;i<d.Data.Count;i++)
+                {
+                    var x=d.Data.X(i); var y=d.Data.Y(i);
+                    Include(s is BarSeries { Horizontal:true }?(horizontal?y:x):(horizontal?x:y));
+                    if(!horizontal&&s is BandSeries b&&i<b.Upper.Count) Include(b.Upper.Y(i));
+                    if(!horizontal&&s is ErrorBarSeries e&&i<e.LowerErrors.Length&&i<e.UpperErrors.Length) { Include(y-e.LowerErrors.Span[i]); Include(y+e.UpperErrors.Span[i]); }
+                }
+                if(!horizontal&&s is LineSeries { FillToBaseline:true } l) Include(l.Baseline);
+                if(s is BarSeries bar) { if(horizontal==bar.Horizontal) Include(bar.Baseline); }
+            }
+            if(s is FinancialSeries f) foreach(var p in f.Points) { if(horizontal) Include(p.X); else { Include(p.Low); Include(p.High); } }
+            if(s is HeatmapSeries h) { Include(horizontal?h.Grid.XMinimum:h.Grid.YMinimum); Include(horizontal?h.Grid.XMaximum:h.Grid.YMaximum); }
+        }
+        if(!double.IsFinite(min)) return;
+        if(axis.Scale==AxisScale.Logarithmic)
+        {
+            var a=Math.Log10(min); var b=Math.Log10(max); var pad=Math.Max((b-a)*0.05,0.05); axis.Range=new(Math.Pow(10,a-pad),Math.Pow(10,b+pad));
+        }
+        else axis.Range=AxisRange.FromData(min,max);
+    }
+    public void Dispose()
+    {
+        if(_disposed) return; _disposed=true;
+        PropertyChanged-=ModelChanged;
+        foreach(var item in _observed) item.PropertyChanged-=ModelChanged;
+        _observed.Clear(); Changed=null;
+    }
+}

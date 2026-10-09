@@ -17,11 +17,43 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Build portable packages
+      - name: Build and test portable packages
         run: |
-          dotnet build src/FastChartsScene.Core -c Release
-          dotnet build src/FastChartsScene.Data -c Release
-          dotnet build src/FastChartsScene.SignalProcessing -c Release
-      - name: Run contract tests
-        if: ${{ hashFiles('tests/FastChartsScene.Tests/Program.cs') != '' }}
-        run: dotnet run --project tests/FastChartsScene.Tests -c Release
+          mkdir -p artifacts
+          dotnet run --project tests/FastChartsScene.Tests -c Release | tee artifacts/core-tests.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-results
+          path: artifacts/core-tests.txt
+  uno:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install WebAssembly workload
+        run: dotnet workload install wasm-tools
+      - name: Compile desktop target
+        run: dotnet build samples/FastChartsScene.Explorer -c Release -f net10.0-desktop
+      - name: Publish browser application
+        run: dotnet publish samples/FastChartsScene.Explorer -c Release -f net10.0-browserwasm -o artifacts/publish
+      - name: Locate browser bundle
+        run: |
+          set -euo pipefail
+          index=$(find artifacts/publish -name index.html -not -path '*/_framework/*' | head -1)
+          test -n "$index"
+          mkdir -p artifacts/site/FastChartsScene
+          cp -a "$(dirname "$index")/." artifacts/site/FastChartsScene/
+          touch artifacts/site/FastChartsScene/.nojekyll
+          git archive --format=zip --output=artifacts/source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-site
+          path: artifacts/site/FastChartsScene
+          include-hidden-files: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source
+          path: artifacts/source.zip
