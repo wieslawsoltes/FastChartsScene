@@ -17,13 +17,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: browser-site
-          run-id: 38089908853
+          run-id: 38091601831
           github-token: ${{ github.token }}
           path: artifacts/site/FastChartsScene
       - name: Record tested application revision
         run: |
           mkdir -p artifacts/browser-results
-          printf '%s\n' 'Application: c0c6ca71c4b662b46ab4ff88a1707e794c5f309b' 'Build run: 38089908853' > artifacts/browser-results/application-revision.txt
+          printf '%s\n' 'Application: d9f77f3c369d265b80154f88b7dbb93e8418d92b' 'Build run: 38091601831' > artifacts/browser-results/application-revision.txt
           printf 'Test harness: ' >> artifacts/browser-results/application-revision.txt
           git rev-parse HEAD >> artifacts/browser-results/application-revision.txt
       - uses: actions/setup-node@v4
