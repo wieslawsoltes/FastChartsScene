@@ -1,0 +1,11 @@
+<Project Sdk="Uno.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0-browserwasm;net10.0-desktop</TargetFrameworks>
+    <OutputType>Library</OutputType><UnoSingleProject>true</UnoSingleProject>
+    <UnoFeatures>SkiaRenderer;GLCanvas;</UnoFeatures>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../FastChartsScene.Interaction/FastChartsScene.Interaction.csproj" />
+    <ProjectReference Include="../FastChartsScene.Rendering.Skia/FastChartsScene.Rendering.Skia.csproj" />
+  </ItemGroup>
+</Project>

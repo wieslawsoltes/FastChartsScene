@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup><ProjectReference Include="../FastChartsScene.Rendering/FastChartsScene.Rendering.csproj" /><PackageReference Include="SkiaSharp" Version="3.119.2" /></ItemGroup></Project>
