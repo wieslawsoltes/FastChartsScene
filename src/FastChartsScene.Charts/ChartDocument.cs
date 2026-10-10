@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 using System.ComponentModel;
 using FastChartsScene.Core;
+using FastChartsScene.Data;
 
 namespace FastChartsScene.Charts;
 
@@ -13,8 +13,8 @@ public sealed class Annotation : ObservableModel
     private double _x,_y,_x2=1,_y2=1;
     private ColorRgba _color=Palette.Series[2];
     public string Text { get=>_text; set=>Set(ref _text,value??""); }
-    public string YAxisId { get=>_yAxisId; set { ArgumentException.ThrowIfNullOrWhiteSpace(value); Set(ref _yAxisId,value); } }
-    public AnnotationKind Kind { get=>_kind; set { if(!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _kind,value); } }
+    public string YAxisId { get=>_yAxisId; set=>Set(ref _yAxisId,value); }
+    public AnnotationKind Kind { get=>_kind; set=>Set(ref _kind,value); }
     public double X { get=>_x; set { Validate(value); Set(ref _x,value); } }
     public double Y { get=>_y; set { Validate(value); Set(ref _y,value); } }
     public double X2 { get=>_x2; set { Validate(value); Set(ref _x2,value); } }
@@ -22,6 +22,7 @@ public sealed class Annotation : ObservableModel
     public ColorRgba Color { get=>_color; set=>Set(ref _color,value); }
     private static void Validate(double v) { if(!double.IsFinite(v)) throw new ArgumentOutOfRangeException(nameof(v)); }
 }
+
 public sealed record ChartSegment(string Name,double Weight,string[] AxisIds);
 public sealed class Camera3D : ObservableModel
 {
@@ -34,8 +35,8 @@ public sealed class Camera3D : ObservableModel
     public void Reset() { Azimuth=38; Elevation=28; Distance=4.5; Orthographic=false; }
 }
 
-/// <summary>Renderer-independent, UI-thread-affine model. Nested update transactions coalesce notifications.</summary>
-public sealed class ChartDocument : ObservableModel,IDisposable
+/// <summary>Renderer-independent chart model with coalesced change notifications and stable axis identities.</summary>
+public sealed class ChartDocument : ObservableModel, IDisposable
 {
     private string _title="FastChartsScene",_subtitle="";
     private ChartView _view;
@@ -47,12 +48,11 @@ public sealed class ChartDocument : ObservableModel,IDisposable
     private readonly HashSet<ObservableModel> _observed=[];
     public event EventHandler? Changed;
     public long Revision { get; private set; }
-    public bool IsDisposed=>_disposed;
     public string Title { get=>_title; set=>Set(ref _title,value??""); }
     public string Subtitle { get=>_subtitle; set=>Set(ref _subtitle,value??""); }
-    public ChartView View { get=>_view; set { if(!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _view,value); } }
+    public ChartView View { get=>_view; set=>Set(ref _view,value); }
     public ChartTheme Theme { get=>_theme; set { ArgumentNullException.ThrowIfNull(value); Set(ref _theme,value); } }
-    public AxisLayout AxisLayout { get=>_axisLayout; set { if(!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _axisLayout,value); } }
+    public AxisLayout AxisLayout { get=>_axisLayout; set=>Set(ref _axisLayout,value); }
     public bool ShowGrid { get=>_showGrid; set=>Set(ref _showGrid,value); }
     public bool ShowLegend { get=>_showLegend; set=>Set(ref _showLegend,value); }
     public ObservableCollection<Axis> XAxes { get; }=[new("x") { Title="X axis" }];
@@ -68,16 +68,14 @@ public sealed class ChartDocument : ObservableModel,IDisposable
     public ChartDocument()
     {
         PropertyChanged+=ModelChanged;
-        XAxes.CollectionChanged+=CollectionChanged; YAxes.CollectionChanged+=CollectionChanged;
-        Series.CollectionChanged+=CollectionChanged; Annotations.CollectionChanged+=CollectionChanged; Segments.CollectionChanged+=CollectionChanged;
+        XAxes.CollectionChanged+=(_,_)=>Rewire(); YAxes.CollectionChanged+=(_,_)=>Rewire();
+        Series.CollectionChanged+=(_,_)=>Rewire(); Annotations.CollectionChanged+=(_,_)=>Rewire(); Segments.CollectionChanged+=(_,_)=>Invalidate();
         Rewire();
     }
-    private void CollectionChanged(object? sender,NotifyCollectionChangedEventArgs e)=>Rewire();
     private void ModelChanged(object? sender,PropertyChangedEventArgs e)=>Invalidate();
     private void Rewire()
     {
-        if(_disposed) return;
-        var current=XAxes.Cast<ObservableModel>().Concat(YAxes).Concat(Series).Concat(Annotations).Append(Camera).Append(ZAxis).Where(m=>m!=null).ToHashSet();
+        var current=XAxes.Cast<ObservableModel>().Concat(YAxes).Concat(Series).Concat(Annotations).Append(Camera).Append(ZAxis).ToHashSet();
         foreach(var item in _observed.Except(current)) item.PropertyChanged-=ModelChanged;
         foreach(var item in current.Except(_observed)) item.PropertyChanged+=ModelChanged;
         _observed.Clear(); _observed.UnionWith(current); Invalidate();
@@ -88,12 +86,12 @@ public sealed class ChartDocument : ObservableModel,IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed,this); _updateDepth++; return new UpdateScope(this);
     }
-    private sealed class UpdateScope(ChartDocument owner):IDisposable
+    private sealed class UpdateScope(ChartDocument owner) : IDisposable
     {
         private ChartDocument? _owner=owner;
         public void Dispose()
         {
-            var d=Interlocked.Exchange(ref _owner,null); if(d==null) return;
+            var d=Interlocked.Exchange(ref _owner,null); if(d is null) return;
             if(--d._updateDepth==0&&d._dirty) d.Invalidate();
         }
     }
@@ -105,38 +103,60 @@ public sealed class ChartDocument : ObservableModel,IDisposable
     }
     public IReadOnlyList<string> Validate()
     {
-        ObjectDisposedException.ThrowIf(_disposed,this);
         List<string> errors=[];
-        if(XAxes.Any(a=>a==null)||YAxes.Any(a=>a==null)||Series.Any(s=>s==null)||Annotations.Any(a=>a==null)||Segments.Any(s=>s==null))
-            return ["Chart collections cannot contain null items."];
         if(XAxes.Count==0||YAxes.Count==0) errors.Add("At least one X and Y axis are required.");
         if(XAxes.GroupBy(a=>a.Id).Any(g=>g.Count()>1)||YAxes.GroupBy(a=>a.Id).Any(g=>g.Count()>1)) errors.Add("Axis IDs must be unique within each dimension.");
-        if(Series.GroupBy(s=>s.Id).Any(g=>g.Count()>1)) errors.Add("Series IDs must be unique.");
         foreach(var s in Series)
         {
             if(!XAxes.Any(a=>a.Id==s.XAxisId)||!YAxes.Any(a=>a.Id==s.YAxisId)) errors.Add($"{s.Title}: missing axis binding.");
             if(s is BandSeries b&&(b.Data.Count!=b.Upper.Count||Enumerable.Range(0,b.Data.Count).Any(i=>b.Data.X(i)!=b.Upper.X(i)))) errors.Add($"{s.Title}: band X coordinates must match.");
             if(s is ErrorBarSeries e&&(e.Data.Count!=e.LowerErrors.Length||e.Data.Count!=e.UpperErrors.Length)) errors.Add($"{s.Title}: error lengths must match data.");
         }
-        foreach(var a in Annotations) if(!YAxes.Any(y=>y.Id==a.YAxisId)) errors.Add($"Annotation '{a.Text}': missing Y axis binding.");
         if(AxisLayout==AxisLayout.Segmented)
         {
-            if(Segments.Count==0||Segments.Any(s=>!double.IsFinite(s.Weight)||s.Weight<=0||s.AxisIds==null||s.AxisIds.Length==0)) errors.Add("Segments require finite positive weights and at least one axis.");
-            else
-            {
-                foreach(var a in YAxes) if(Segments.Sum(s=>s.AxisIds.Count(id=>id==a.Id))!=1) errors.Add($"Axis {a.Id} must belong to exactly one segment.");
-                foreach(var s in Segments) foreach(var id in s.AxisIds) if(!YAxes.Any(a=>a.Id==id)) errors.Add($"Segment '{s.Name}' references unknown axis '{id}'.");
-            }
+            if(Segments.Count==0||Segments.Any(s=>!double.IsFinite(s.Weight)||s.Weight<=0)) errors.Add("Segment weights must be finite and positive.");
+            foreach(var a in YAxes) if(Segments.Count(s=>s.AxisIds.Contains(a.Id))!=1) errors.Add($"Axis {a.Id} must belong to exactly one segment.");
         }
         return errors;
     }
-    public void AutoFit()=>ChartAutoFit.Apply(this);
+    public void AutoFit()
+    {
+        using var update=BeginUpdate();
+        foreach(var x in XAxes) FitAxis(x,true);
+        foreach(var y in YAxes) FitAxis(y,false);
+    }
+    private void FitAxis(Axis axis,bool horizontal)
+    {
+        var min=double.PositiveInfinity; var max=double.NegativeInfinity;
+        void Include(double v) { if(double.IsFinite(v)&&(axis.Scale!=AxisScale.Logarithmic||v>0)) { min=Math.Min(min,v); max=Math.Max(max,v); } }
+        foreach(var s in Series.Where(s=>s.Visible&&(horizontal?s.XAxisId:s.YAxisId)==axis.Id))
+        {
+            if(s is DataSeries d)
+            {
+                for(var i=0;i<d.Data.Count;i++)
+                {
+                    var x=d.Data.X(i); var y=d.Data.Y(i);
+                    Include(s is BarSeries { Horizontal:true }?(horizontal?y:x):(horizontal?x:y));
+                    if(!horizontal&&s is BandSeries b&&i<b.Upper.Count) Include(b.Upper.Y(i));
+                    if(!horizontal&&s is ErrorBarSeries e&&i<e.LowerErrors.Length&&i<e.UpperErrors.Length) { Include(y-e.LowerErrors.Span[i]); Include(y+e.UpperErrors.Span[i]); }
+                }
+                if(!horizontal&&s is LineSeries { FillToBaseline:true } l) Include(l.Baseline);
+                if(s is BarSeries bar) { if(horizontal==bar.Horizontal) Include(bar.Baseline); }
+            }
+            if(s is FinancialSeries f) foreach(var p in f.Points) { if(horizontal) Include(p.X); else { Include(p.Low); Include(p.High); } }
+            if(s is HeatmapSeries h) { Include(horizontal?h.Grid.XMinimum:h.Grid.YMinimum); Include(horizontal?h.Grid.XMaximum:h.Grid.YMaximum); }
+        }
+        if(!double.IsFinite(min)) return;
+        if(axis.Scale==AxisScale.Logarithmic)
+        {
+            var a=Math.Log10(min); var b=Math.Log10(max); var pad=Math.Max((b-a)*0.05,0.05); axis.Range=new(Math.Pow(10,a-pad),Math.Pow(10,b+pad));
+        }
+        else axis.Range=AxisRange.FromData(min,max);
+    }
     public void Dispose()
     {
         if(_disposed) return; _disposed=true;
         PropertyChanged-=ModelChanged;
-        XAxes.CollectionChanged-=CollectionChanged; YAxes.CollectionChanged-=CollectionChanged;
-        Series.CollectionChanged-=CollectionChanged; Annotations.CollectionChanged-=CollectionChanged; Segments.CollectionChanged-=CollectionChanged;
         foreach(var item in _observed) item.PropertyChanged-=ModelChanged;
         _observed.Clear(); Changed=null;
     }
