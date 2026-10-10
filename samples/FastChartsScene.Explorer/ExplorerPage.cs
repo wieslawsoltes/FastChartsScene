@@ -14,7 +14,7 @@ using Windows.Storage.Pickers;
 
 namespace FastChartsScene.Explorer;
 
-public sealed class ExplorerPage : Page
+public sealed partial class ExplorerPage : Page
 {
     public ChartControl Chart { get; }=new();
     public ChartExample Current { get; private set; }=ExampleCatalog.All[0];
@@ -72,6 +72,8 @@ public sealed class ExplorerPage : Page
         toolbar.Children.Add(Button("Redo",()=>Execute(()=>Chart.Interaction?.Redo())));
         toolbar.Children.Add(Button("PNG",()=>Export("png")));
         toolbar.Children.Add(Button("CSV",()=>Export("csv")));
+        toolbar.Children.Add(Button("Save chart",SaveDocument));
+        toolbar.Children.Add(Button("Open chart",OpenDocument));
         toolbar.Children.Add(Button("Frame JSON",()=>Export("json")));
         toolbar.Children.Add(Button("Inspector",()=> { _inspectorVisible=!_inspectorVisible; Responsive(); }));
         var tools=new ScrollViewer { Content=toolbar,HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled,HorizontalScrollMode=ScrollMode.Enabled,VerticalScrollMode=ScrollMode.Disabled };
