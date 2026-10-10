@@ -24,7 +24,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          dotnet run --project tests/FastChartsScene.Tests -c Release | tee artifacts/core-tests.txt
+          dotnet run --project tests/FastChartsScene.Tests -c Release 2>&1 | tee artifacts/core-tests.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -46,9 +46,9 @@ jobs:
       - name: Install WebAssembly workload
         run: dotnet workload install wasm-tools
       - name: Compile desktop target
-        run: dotnet build samples/FastChartsScene.Explorer -c Release -f net10.0-desktop | tee artifacts/desktop-build.txt
+        run: dotnet build samples/FastChartsScene.Explorer -c Release -f net10.0-desktop 2>&1 | tee artifacts/desktop-build.txt
       - name: Publish browser application
-        run: dotnet publish samples/FastChartsScene.Explorer -c Release -f net10.0-browserwasm -o artifacts/publish | tee artifacts/browser-build.txt
+        run: dotnet publish samples/FastChartsScene.Explorer -c Release -f net10.0-browserwasm -o artifacts/publish 2>&1 | tee artifacts/browser-build.txt
       - name: Locate browser bundle
         run: |
           set -euo pipefail
@@ -57,12 +57,13 @@ jobs:
           mkdir -p artifacts/site/FastChartsScene
           cp -a "$(dirname "$index")/." artifacts/site/FastChartsScene/
           touch artifacts/site/FastChartsScene/.nojekyll
-      - name: Pack reusable libraries
+      - name: Pack and verify reusable libraries
         run: |
           mkdir -p artifacts/packages
           for project in src/*/*.csproj; do
             dotnet pack "$project" -c Release -o artifacts/packages
           done
+          python tests/verify-packages.py | tee artifacts/package-tests.txt
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -73,14 +74,14 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Validate actual browser application
         working-directory: tests/browser
-        run: node browser-tests.mjs | tee ../../artifacts/browser-tests.txt
+        run: node browser-tests.mjs 2>&1 | tee ../../artifacts/browser-tests.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: validation-evidence
           path: |
             artifacts/*-build.txt
-            artifacts/browser-tests.txt
+            artifacts/*-tests.txt
             artifacts/browser-results
             artifacts/source-revision.txt
           if-no-files-found: error
