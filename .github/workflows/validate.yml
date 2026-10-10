@@ -60,10 +60,9 @@ jobs:
         id: pack
         run: |
           mkdir -p artifacts/packages
-          dotnet msbuild src/FastChartsScene.Controls.Uno/FastChartsScene.Controls.Uno.csproj -p:Configuration=Release -getProperty:IsPackable,OutputType,TargetFrameworks,GeneratePackageOnBuild,PackDependsOn > artifacts/pack-properties.txt
           for project in src/*/*.csproj; do
             if [[ "$project" == *Controls.Uno* ]]; then
-              dotnet pack "$project" -c Release -p:IsPackable=true -o artifacts/packages -v:diagnostic > artifacts/controls-pack-diagnostic.txt 2>&1
+              dotnet pack "$project" -c Release -p:IsPackable=true -o artifacts/packages 2>&1 | tee artifacts/controls-pack.txt
             else
               dotnet pack "$project" -c Release -o artifacts/packages
             fi
