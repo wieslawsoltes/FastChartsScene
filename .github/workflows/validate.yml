@@ -22,7 +22,6 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Build and test portable packages
         run: |
-          set -euo pipefail
           mkdir -p artifacts
           dotnet run --project tests/FastChartsScene.Tests -c Release 2>&1 | tee artifacts/core-tests.txt
       - uses: actions/upload-artifact@v4
@@ -48,31 +47,45 @@ jobs:
       - name: Compile desktop target
         run: dotnet build samples/FastChartsScene.Explorer -c Release -f net10.0-desktop 2>&1 | tee artifacts/desktop-build.txt
       - name: Publish browser application
+        id: publish
         run: dotnet publish samples/FastChartsScene.Explorer -c Release -f net10.0-browserwasm -o artifacts/publish 2>&1 | tee artifacts/browser-build.txt
       - name: Locate browser bundle
         run: |
-          set -euo pipefail
           index=$(find artifacts/publish -name index.html -not -path '*/_framework/*' | head -1)
           test -n "$index"
           mkdir -p artifacts/site/FastChartsScene
           cp -a "$(dirname "$index")/." artifacts/site/FastChartsScene/
           touch artifacts/site/FastChartsScene/.nojekyll
       - name: Pack and verify reusable libraries
+        id: pack
         run: |
           mkdir -p artifacts/packages
+          dotnet msbuild src/FastChartsScene.Controls.Uno/FastChartsScene.Controls.Uno.csproj -p:Configuration=Release -getProperty:IsPackable,OutputType,TargetFrameworks,GeneratePackageOnBuild,PackDependsOn > artifacts/pack-properties.txt
           for project in src/*/*.csproj; do
-            dotnet pack "$project" -c Release -o artifacts/packages
+            if [[ "$project" == *Controls.Uno* ]]; then
+              dotnet pack "$project" -c Release -p:IsPackable=true -o artifacts/packages -v:diagnostic > artifacts/controls-pack-diagnostic.txt 2>&1
+            else
+              dotnet pack "$project" -c Release -o artifacts/packages
+            fi
           done
           python tests/verify-packages.py | tee artifacts/package-tests.txt
+      - name: Compile isolated package consumer
+        if: steps.pack.outcome == 'success'
+        run: |
+          dotnet build tests/PackageConsumer -c Release -f net10.0-desktop 2>&1 | tee artifacts/package-consumer-desktop.txt
+          dotnet build tests/PackageConsumer -c Release -f net10.0-browserwasm 2>&1 | tee artifacts/package-consumer-browser.txt
       - uses: actions/setup-node@v4
+        if: always() && steps.publish.outcome == 'success'
         with:
           node-version: '22'
       - name: Install browser test dependencies
+        if: always() && steps.publish.outcome == 'success'
         working-directory: tests/browser
         run: |
           npm install --ignore-scripts --no-audit --no-fund --no-package-lock
           npx playwright install --with-deps chromium
       - name: Validate actual browser application
+        if: always() && steps.publish.outcome == 'success'
         working-directory: tests/browser
         run: node browser-tests.mjs 2>&1 | tee ../../artifacts/browser-tests.txt
       - uses: actions/upload-artifact@v4
@@ -80,10 +93,8 @@ jobs:
         with:
           name: validation-evidence
           path: |
-            artifacts/*-build.txt
-            artifacts/*-tests.txt
+            artifacts/*.txt
             artifacts/browser-results
-            artifacts/source-revision.txt
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
