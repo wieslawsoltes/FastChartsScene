@@ -4,6 +4,11 @@
     <OutputType>Library</OutputType><UnoSingleProject>true</UnoSingleProject>
     <UnoFeatures>SkiaRenderer;GLCanvas;</UnoFeatures>
   </PropertyGroup>
+  <!-- Uno.Sdk 6.6.33 wires GLCanvas automatically on desktop, but not on browserwasm.
+       Use its package-version resolver so the add-in stays aligned with the selected Uno runtime. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-browserwasm'">
+    <_UnoProjectSystemPackageReference Include="Uno.WinUI.Graphics3DGL" ProjectSystem="true" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../FastChartsScene.Interaction/FastChartsScene.Interaction.csproj" />
     <ProjectReference Include="../FastChartsScene.Rendering.Skia/FastChartsScene.Rendering.Skia.csproj" />

@@ -32,17 +32,23 @@ jobs:
           path: artifacts/core-tests.txt
   uno:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - name: Preserve exact source revision
+        run: |
+          mkdir -p artifacts
+          git archive --format=zip --output=artifacts/source.zip HEAD
+          git rev-parse HEAD HEAD^{tree} > artifacts/source-revision.txt
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
       - name: Install WebAssembly workload
         run: dotnet workload install wasm-tools
       - name: Compile desktop target
-        run: dotnet build samples/FastChartsScene.Explorer -c Release -f net10.0-desktop
+        run: dotnet build samples/FastChartsScene.Explorer -c Release -f net10.0-desktop | tee artifacts/desktop-build.txt
       - name: Publish browser application
-        run: dotnet publish samples/FastChartsScene.Explorer -c Release -f net10.0-browserwasm -o artifacts/publish
+        run: dotnet publish samples/FastChartsScene.Explorer -c Release -f net10.0-browserwasm -o artifacts/publish | tee artifacts/browser-build.txt
       - name: Locate browser bundle
         run: |
           set -euo pipefail
@@ -51,13 +57,47 @@ jobs:
           mkdir -p artifacts/site/FastChartsScene
           cp -a "$(dirname "$index")/." artifacts/site/FastChartsScene/
           touch artifacts/site/FastChartsScene/.nojekyll
-          git archive --format=zip --output=artifacts/source.zip HEAD
+      - name: Pack reusable libraries
+        run: |
+          mkdir -p artifacts/packages
+          for project in src/*/*.csproj; do
+            dotnet pack "$project" -c Release -o artifacts/packages
+          done
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test dependencies
+        working-directory: tests/browser
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund --no-package-lock
+          npx playwright install --with-deps chromium
+      - name: Validate actual browser application
+        working-directory: tests/browser
+        run: node browser-tests.mjs | tee ../../artifacts/browser-tests.txt
       - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-evidence
+          path: |
+            artifacts/*-build.txt
+            artifacts/browser-tests.txt
+            artifacts/browser-results
+            artifacts/source-revision.txt
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: source
+          path: artifacts/source.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: packages
+          path: artifacts/packages
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: browser-site
           path: artifacts/site/FastChartsScene
           include-hidden-files: true
-      - uses: actions/upload-artifact@v4
-        with:
-          name: source
-          path: artifacts/source.zip
