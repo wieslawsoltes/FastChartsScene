@@ -16,7 +16,8 @@ const server=createServer(async(req,res)=>{
     if(pathname.endsWith('/')) pathname+='index.html';
     const file=resolve(root,'.'+pathname);
     if(!file.startsWith(root+sep)) { res.writeHead(403).end(); return; }
-    res.writeHead(200,{'Content-Type':mime[extname(file)]??'application/octet-stream','Cache-Control':'no-store'}); res.end(await readFile(file));
+    const bytes=await readFile(file);
+    res.writeHead(200,{'Content-Type':mime[extname(file)]??'application/octet-stream','Cache-Control':'no-store'}); res.end(bytes);
   } catch { if(!res.headersSent) res.writeHead(404); res.end(); }
 });
 await new Promise(done=>server.listen(0,'127.0.0.1',done));
@@ -45,11 +46,15 @@ async function open(dpr) {
   await page.evaluate(async()=>{
     const exports=await globalThis.Module.getAssemblyExports('FastChartsScene.Explorer');
     globalThis.chartBridge=exports.FastChartsScene.Explorer.BrowserBridge;
+    document.addEventListener('wheel',e=>{ globalThis.lastChartWheel={x:e.clientX,y:e.clientY}; },{capture:true,passive:true});
   });
   await page.waitForFunction(()=>{
     try { return JSON.parse(globalThis.chartBridge.Inspect()).bounds.width>100; }
     catch(e) { if(String(e).includes('Explorer not initialized')) return false; throw e; }
   },undefined,{timeout:180000});
+  // Managed layout and SKCanvas drawing can occur while Uno's HTML splash still covers the window.
+  // Wait for its real removal rather than accepting a managed counter as proof of presentation.
+  await page.locator('.uno-loader').waitFor({state:'detached',timeout:180000});
   await command('backend','Skia');
   await waitFor(s=>s.backend==='Skia (explicit)'&&s.vertices>0&&s.overlayDraws>0,'explicit Skia presentation');
   return context;
@@ -66,6 +71,7 @@ async function click(title) {
   await page.mouse.click(b.x+b.width/2,b.y+b.height/2);
 }
 async function picture(name) {
+  await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
   const state=await inspect(); const b=state.bounds,p=state.plot;
   const png=PNG.sync.read(await page.screenshot({path:resolve(output,name+'.png'),scale:'css'}));
   let colored=0;
@@ -95,13 +101,18 @@ try {
   for(const id of examples) await scenario('2D pixels: '+id,async()=>{ await select(id); return {coloredPixels:await picture('skia-'+id)}; });
   await scenario('pointer wheel and keyboard history',async()=>{
     const before=await select('signals'); const p=point(before,.3,.55);
-    await page.mouse.click(p.x,p.y); await page.mouse.wheel(0,-120);
+    await page.mouse.click(p.x,p.y); await page.evaluate(()=>{globalThis.lastChartWheel=null;}); await page.mouse.wheel(0,-120);
     const after=await waitFor(s=>span(axis(s))<10,'wheel zoom');
-    const anchorBefore=axis(before).minimum+.3*span(axis(before));
-    const anchorAfter=axis(after).minimum+.3*span(axis(after));
-    assert(Math.abs(anchorBefore-anchorAfter)<1e-5);
+    const wheel=await page.evaluate(()=>globalThis.lastChartWheel); assert(wheel,'Browser did not dispatch a wheel event.');
+    // Browser WheelEvent coordinates may be rounded independently of the requested mouse position.
+    // Test the data anchor at the coordinates actually delivered to the app, not an idealized 30% point.
+    const u=(wheel.x-before.bounds.x-before.plot.x)/before.plot.width;
+    const anchorBefore=axis(before).minimum+u*span(axis(before));
+    const anchorAfter=axis(after).minimum+u*span(axis(after));
+    assert(Math.abs(anchorBefore-anchorAfter)<1e-7,JSON.stringify({wheel,u,anchorBefore,anchorAfter,before:axis(before),after:axis(after)}));
     await page.keyboard.press('z'); await waitFor(s=>Math.abs(span(axis(s))-10)<1e-8,'keyboard undo');
     await page.keyboard.press('y'); await waitFor(s=>Math.abs(span(axis(s))-span(axis(after)))<1e-8,'keyboard redo');
+    return {wheel,anchorBefore,anchorAfter};
   });
   await scenario('pointer pan and rectangle zoom',async()=>{
     const before=await select('signals'); const p=point(before);
@@ -126,7 +137,12 @@ try {
     } finally { await command('stream',false); }
   });
   for(const theme of ['light','contrast','dark']) await scenario('theme pixels: '+theme,async()=>{
-    await select('signals'); const before=await inspect(); await command('theme',theme);
+    await select('signals');
+    if(theme==='dark') {
+      // Fixtures start dark; assigning the same immutable theme is correctly a no-op.
+      const initial=await inspect(); await command('theme','light'); await waitFor(s=>s.overlayDraws>initial.overlayDraws,'prepare dark-theme transition');
+    }
+    const before=await inspect(); await command('theme',theme);
     await waitFor(s=>s.overlayDraws>before.overlayDraws,'theme redraw'); return {coloredPixels:await picture('theme-'+theme)};
   });
   for(const kind of ['PNG','CSV','Save chart']) await scenario('toolbar download: '+kind,async()=>{
@@ -140,8 +156,8 @@ try {
   await scenario('managed document import roundtrip preserves pixels and data',async()=>{
     const before=await select('signals');
     const saved=await page.evaluate(()=>globalThis.chartBridge.ExportDocument());
-    await select('band'); await page.evaluate(json=>globalThis.chartBridge.ImportDocument(json),saved);
-    const loaded=await waitFor(s=>s.example==='document'&&s.sourcePoints===before.sourcePoints,'document import');
+    const previous=await select('band'); await page.evaluate(json=>globalThis.chartBridge.ImportDocument(json),saved);
+    const loaded=await waitFor(s=>s.example==='document'&&s.sourcePoints===before.sourcePoints&&s.vertices>0&&s.overlayDraws>previous.overlayDraws,'document import presentation');
     assert.equal(loaded.vertices,before.vertices);
     assert.equal(await page.evaluate(()=>globalThis.chartBridge.ExportDocument()),saved);
     await picture('imported-document');
