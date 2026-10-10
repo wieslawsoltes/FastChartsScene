@@ -1,0 +1,219 @@
+using System.Globalization;
+using System.Text;
+using FastChartsScene.Charts;
+using FastChartsScene.Controls.Uno;
+using FastChartsScene.Core;
+using FastChartsScene.Data;
+using FastChartsScene.Examples;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+
+namespace FastChartsScene.Explorer;
+
+public sealed class ExplorerPage : Page
+{
+    public ChartControl Chart { get; }=new();
+    public ChartExample Current { get; private set; }=ExampleCatalog.All[0];
+    public ChartDocument Document=>Chart.Document!;
+    public bool IsStreaming=>_timer.IsEnabled;
+    public string? LastCommandError { get; private set; }
+    private readonly DispatcherTimer _timer=new() { Interval=TimeSpan.FromMilliseconds(32) };
+    private readonly Grid _workspace=new();
+    private readonly StackPanel _inspector=new() { Spacing=12,Padding=new Thickness(16) };
+    private readonly ListView _examples=new() { DisplayMemberPath=nameof(ChartExample.Title),SelectionMode=ListViewSelectionMode.Single };
+    private readonly TextBox _search=new() { PlaceholderText="Search examples",Margin=new Thickness(12,8,12,8) };
+    private readonly ComboBox _category=new() { HorizontalAlignment=HorizontalAlignment.Stretch,Margin=new Thickness(12,0,12,8) };
+    private readonly TextBlock _status=new() { FontSize=11,Margin=new Thickness(16,6,16,4),TextTrimming=TextTrimming.CharacterEllipsis };
+    private readonly TextBlock _description=new() { TextWrapping=TextWrapping.Wrap,FontSize=13,Margin=new Thickness(16) };
+    private readonly TextBox _data=new() { IsReadOnly=true,AcceptsReturn=true,FontFamily=new FontFamily("monospace"),FontSize=11,BorderThickness=new Thickness(0),Margin=new Thickness(12),TextWrapping=TextWrapping.NoWrap };
+    private readonly TextBox _usage=new() { IsReadOnly=true,AcceptsReturn=true,FontFamily=new FontFamily("monospace"),FontSize=12,BorderThickness=new Thickness(0),Margin=new Thickness(12) };
+    private readonly Button _play=new() { Content="Start acquisition",Padding=new Thickness(12,6,12,6) };
+    private RollingBuffer[] _buffers=[];
+    private bool _selecting;
+    private bool _inspectorVisible=true,_galleryVisible=true;
+    private readonly Grid _root=new();
+    private static SolidColorBrush Brush(string hex)
+    {
+        var c=ColorRgba.Parse(hex); return new SolidColorBrush(Windows.UI.Color.FromArgb((byte)(c.A*255),(byte)(c.R*255),(byte)(c.G*255),(byte)(c.B*255)));
+    }
+    private static TextBlock Label(string text,double size=12)=>new() { Text=text,FontSize=size,TextWrapping=TextWrapping.Wrap };
+    private static Button Button(string title,Action action)
+    {
+        var b=new Button { Content=title,Padding=new Thickness(12,6,12,6) }; AutomationProperties.SetName(b,title); b.Click+=(_,_)=>action(); return b;
+    }
+    private void Execute(Action action)
+    {
+        try { action(); LastCommandError=null; } catch(Exception e) { LastCommandError=e.Message; }
+        UpdateStatus();
+    }
+    public ExplorerPage()
+    {
+        BrowserBridge.Page=this; Background=Brush("14171C");
+        _root.RowDefinitions.Add(new() { Height=new GridLength(54) });
+        _root.RowDefinitions.Add(new() { Height=GridLength.Auto });
+        _root.RowDefinitions.Add(new() { Height=new GridLength(1,GridUnitType.Star) });
+        _root.RowDefinitions.Add(new() { Height=new GridLength(30) });
+        var brand=new Grid { Background=Brush("1B1F26"),Padding=new Thickness(18,0,18,0) };
+        brand.ColumnDefinitions.Add(new() { Width=new GridLength(1,GridUnitType.Star) }); brand.ColumnDefinitions.Add(new() { Width=GridLength.Auto });
+        var identity=new StackPanel { Orientation=Orientation.Horizontal,Spacing=12,VerticalAlignment=VerticalAlignment.Center };
+        identity.Children.Add(new Border { Background=Brush("E9D53E"),Width=5,Height=26,CornerRadius=new CornerRadius(2) });
+        identity.Children.Add(new TextBlock { Text="FastChartsScene",FontSize=21,FontWeight=Microsoft.UI.Text.FontWeights.SemiBold });
+        identity.Children.Add(new TextBlock { Text="SCIENTIFIC CHART EXPLORER",FontSize=10,CharacterSpacing=130,Opacity=.55,VerticalAlignment=VerticalAlignment.Center }); brand.Children.Add(identity);
+        var badge=new TextBlock { Text="Independent implementation · Preview",FontSize=11,Opacity=.65,VerticalAlignment=VerticalAlignment.Center }; Grid.SetColumn(badge,1); brand.Children.Add(badge); _root.Children.Add(brand);
+        var toolbar=new StackPanel { Orientation=Orientation.Horizontal,Spacing=6,Padding=new Thickness(12,8,12,8) };
+        toolbar.Children.Add(Button("Examples",()=> { _galleryVisible=!_galleryVisible; Responsive(); }));
+        _play.Click+=(_,_)=>Execute(()=>SetStreaming(!IsStreaming)); toolbar.Children.Add(_play);
+        toolbar.Children.Add(Button("Fit",()=>Execute(()=>Chart.Interaction?.ResetView())));
+        toolbar.Children.Add(Button("Undo",()=>Execute(()=>Chart.Interaction?.Undo())));
+        toolbar.Children.Add(Button("Redo",()=>Execute(()=>Chart.Interaction?.Redo())));
+        toolbar.Children.Add(Button("PNG",()=>Export("png")));
+        toolbar.Children.Add(Button("CSV",()=>Export("csv")));
+        toolbar.Children.Add(Button("Frame JSON",()=>Export("json")));
+        toolbar.Children.Add(Button("Inspector",()=> { _inspectorVisible=!_inspectorVisible; Responsive(); }));
+        var tools=new ScrollViewer { Content=toolbar,HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled,HorizontalScrollMode=ScrollMode.Enabled,VerticalScrollMode=ScrollMode.Disabled };
+        Grid.SetRow(tools,1); _root.Children.Add(tools);
+        _workspace.ColumnDefinitions.Add(new() { Width=new GridLength(240) }); _workspace.ColumnDefinitions.Add(new() { Width=new GridLength(1,GridUnitType.Star) }); _workspace.ColumnDefinitions.Add(new() { Width=new GridLength(256) });
+        var gallery=new Grid { Background=Brush("1B1F26") };
+        foreach(var height in new[]{GridLength.Auto,GridLength.Auto,GridLength.Auto,new GridLength(1,GridUnitType.Star),GridLength.Auto}) gallery.RowDefinitions.Add(new() { Height=height });
+        gallery.Children.Add(new TextBlock { Text=$"EXAMPLES  /  {ExampleCatalog.All.Count}",FontSize=11,CharacterSpacing=100,Margin=new Thickness(16,17,12,6),Opacity=.7 });
+        Grid.SetRow(_search,1); gallery.Children.Add(_search); Grid.SetRow(_category,2); gallery.Children.Add(_category); Grid.SetRow(_examples,3); gallery.Children.Add(_examples);
+        var note=new TextBlock { Text="All datasets are synthetic.\nDesktop and browser share the same C# models and controls.",TextWrapping=TextWrapping.Wrap,FontSize=11,Opacity=.5,Margin=new Thickness(16) }; Grid.SetRow(note,4); gallery.Children.Add(note);
+        _workspace.Children.Add(gallery);
+        var center=new Grid(); center.RowDefinitions.Add(new() { Height=new GridLength(1,GridUnitType.Star) }); center.RowDefinitions.Add(new() { Height=new GridLength(168) });
+        center.Children.Add(Chart);
+        var tabs=new Pivot { Margin=new Thickness(1,0,1,0),Background=Brush("1B1F26") };
+        tabs.Items.Add(new PivotItem { Header="Overview",Content=new ScrollViewer { Content=_description } });
+        tabs.Items.Add(new PivotItem { Header="Data",Content=_data }); tabs.Items.Add(new PivotItem { Header="C# usage",Content=_usage }); Grid.SetRow(tabs,1); center.Children.Add(tabs); Grid.SetColumn(center,1); _workspace.Children.Add(center);
+        var inspector=new ScrollViewer { Content=_inspector,Background=Brush("1B1F26"),HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled }; Grid.SetColumn(inspector,2); _workspace.Children.Add(inspector);
+        Grid.SetRow(_workspace,2); _root.Children.Add(_workspace); Grid.SetRow(_status,3); _root.Children.Add(_status); Content=_root;
+        _category.ItemsSource=new[]{"All examples"}.Concat(ExampleCatalog.All.Select(e=>e.Category).Distinct()).ToArray(); _category.SelectedIndex=0;
+        _category.SelectionChanged+=(_,_)=>Filter(); _search.TextChanged+=(_,_)=>Filter();
+        _examples.SelectionChanged+=(_,_)=> { if(!_selecting&&_examples.SelectedItem is ChartExample e) Execute(()=>SelectExample(e.Id)); };
+        Chart.FrameChanged+=(_,_)=>UpdateStatus(); _timer.Tick+=(_,_)=>Execute(AppendStream);
+        SizeChanged+=(_,_)=>Responsive(); Unloaded+=(_,_)=>SetStreaming(false);
+        Filter(); SelectExample("signals");
+    }
+    private void Filter()
+    {
+        var category=_category.SelectedItem as string; var text=_search.Text.Trim(); _selecting=true;
+        _examples.ItemsSource=ExampleCatalog.All.Where(e=>(category=="All examples"||category==null||e.Category==category)&&(e.Title.Contains(text,StringComparison.OrdinalIgnoreCase)||e.Description.Contains(text,StringComparison.OrdinalIgnoreCase))).ToArray();
+        _examples.SelectedItem=Current; _selecting=false;
+    }
+    private void Responsive()
+    {
+        _workspace.ColumnDefinitions[0].Width=new GridLength(_galleryVisible&&ActualWidth>=680?240:0);
+        _workspace.ColumnDefinitions[2].Width=new GridLength(_inspectorVisible&&ActualWidth>=1100?256:0);
+    }
+    public void SelectExample(string id)
+    {
+        var example=ExampleCatalog.Find(id); var next=example.Create(); var old=Chart.Document;
+        SetStreaming(false); _buffers=[]; Current=example; Chart.Document=next; old?.Dispose();
+        _selecting=true; _examples.SelectedItem=example; _selecting=false;
+        _description.Text=example.Description+"\n\nControls: drag to pan or orbit; wheel/pinch to zoom; Shift-drag for rectangle zoom; Home to fit; Z / Y to undo / redo. Click a legend entry to toggle its series.\n\nThis preview is not full LightningChart API, feature, visual, or performance parity.";
+        _usage.Text=$"using FastChartsScene.Examples;\nusing FastChartsScene.Controls.Uno;\n\nvar document = ExampleCatalog.Find(\"{id}\").Create();\nvar chart = new ChartControl {{ Document = document }};\n// Document is caller-owned; dispose it after detaching.\n// Package: FastChartsScene.Controls.Uno";
+        _play.IsEnabled=id is "signals" or "streaming";
+        var first=next.Series.OfType<DataSeries>().FirstOrDefault();
+        _data.Text=first==null?$"{next.Series.Count} series · {next.TotalPoints:N0} source values\nGrid, mesh and financial data are held in typed chart models.":SampleText(first.Data);
+        BuildInspector(); UpdateStatus();
+    }
+    private static string SampleText(IDataSource data)
+    {
+        var b=new StringBuilder("Original samples (first 24)\nIndex        X                  Y\n");
+        for(var i=0;i<Math.Min(24,data.Count);i++) b.AppendLine(FormattableString.Invariant($"{i,-10} {data.X(i),-18:G9} {data.Y(i),-18:G9}")); return b.ToString();
+    }
+    private void BuildInspector()
+    {
+        _inspector.Children.Clear(); var d=Document;
+        _inspector.Children.Add(new TextBlock { Text="CHART INSPECTOR",FontSize=11,CharacterSpacing=100,Opacity=.65 });
+        var title=new TextBox { Header="Title",Text=d.Title }; title.TextChanged+=(_,_)=>d.Title=title.Text; _inspector.Children.Add(title);
+        var theme=new ComboBox { Header="Theme",ItemsSource=new[]{"Dark","Light","High contrast"},SelectedIndex=d.Theme==ChartTheme.Light?1:d.Theme==ChartTheme.HighContrast?2:0,HorizontalAlignment=HorizontalAlignment.Stretch };
+        theme.SelectionChanged+=(_,_)=>SetTheme(theme.SelectedIndex==1?"light":theme.SelectedIndex==2?"contrast":"dark"); _inspector.Children.Add(theme);
+        var renderer=new ComboBox { Header="Rendering backend",ItemsSource=Enum.GetValues<ChartRenderingMode>(),SelectedItem=Chart.RenderingMode,HorizontalAlignment=HorizontalAlignment.Stretch };
+        renderer.SelectionChanged+=(_,_)=> { if(renderer.SelectedItem is ChartRenderingMode mode) Chart.RenderingMode=mode; }; _inspector.Children.Add(renderer);
+        Check("Grid",d.ShowGrid,v=>d.ShowGrid=v); Check("Legend",d.ShowLegend,v=>d.ShowLegend=v);
+        if(d.View is ChartView.ThreeD or ChartView.Pie3D) Check("Orthographic projection",d.Camera.Orthographic,v=>d.Camera.Orthographic=v);
+        var axisSelector=new ComboBox { Header="Axis",ItemsSource=d.XAxes.Concat(d.YAxes).Append(d.ZAxis).ToArray(),DisplayMemberPath=nameof(Axis.Title),SelectedItem=d.XAxis,HorizontalAlignment=HorizontalAlignment.Stretch };
+        var min=new NumberBox { Header="Minimum",Value=d.XAxis.Range.Minimum }; var max=new NumberBox { Header="Maximum",Value=d.XAxis.Range.Maximum };
+        axisSelector.SelectionChanged+=(_,_)=> { if(axisSelector.SelectedItem is Axis a) { min.Value=a.Range.Minimum; max.Value=a.Range.Maximum; } };
+        _inspector.Children.Add(axisSelector); _inspector.Children.Add(min); _inspector.Children.Add(max);
+        _inspector.Children.Add(Button("Apply range",()=>Execute(()=> { if(axisSelector.SelectedItem is Axis a) a.Range=new AxisRange(min.Value,max.Value); })));
+        _inspector.Children.Add(new Border { Height=1,Background=Brush("373D46"),Margin=new Thickness(0,4,0,4) });
+        _inspector.Children.Add(Label("SERIES",11));
+        foreach(var s in d.Series)
+        {
+            Check(s.Title,s.Visible,v=>s.Visible=v);
+            var width=new Slider { Minimum=0,Maximum=6,StepFrequency=.25,Value=s.StrokeWidth,Header="Stroke width" }; width.ValueChanged+=(_,_)=>s.StrokeWidth=width.Value; _inspector.Children.Add(width);
+            if(s is LineSeries line)
+            {
+                var marker=new ComboBox { Header="Marker",ItemsSource=Enum.GetValues<MarkerShape>(),SelectedItem=line.Marker,HorizontalAlignment=HorizontalAlignment.Stretch };
+                marker.SelectionChanged+=(_,_)=> { if(marker.SelectedItem is MarkerShape m) line.Marker=m; }; _inspector.Children.Add(marker);
+            }
+        }
+        void Check(string text,bool initial,Action<bool> changed)
+        {
+            var c=new CheckBox { Content=text,IsChecked=initial }; c.Checked+=(_,_)=>changed(true); c.Unchecked+=(_,_)=>changed(false); _inspector.Children.Add(c);
+        }
+    }
+    public void SetTheme(string name)=>Document.Theme=name switch { "light"=>ChartTheme.Light,"contrast"=>ChartTheme.HighContrast,"dark"=>ChartTheme.Dark,_=>throw new ArgumentException("Unknown theme.") };
+    public void SetStreaming(bool enabled)
+    {
+        if(!enabled) { _timer.Stop(); _play.Content="Start acquisition"; return; }
+        if(Current.Id is not ("signals" or "streaming")) throw new InvalidOperationException("Select a signal acquisition example first.");
+        if(_buffers.Length==0)
+        {
+            _buffers=Enumerable.Range(0,3).Select(_=>new RollingBuffer(20000,0,.0005)).ToArray();
+            for(var channel=0;channel<3;channel++) _buffers[channel].Append(Enumerable.Range(0,20000).Select(i=>Signal(i*.0005,channel)).ToArray());
+        }
+        _timer.Start(); _play.Content="Pause acquisition";
+    }
+    private static double Signal(double t,int channel)=>channel switch { 0=>Math.Sin(t*7)*(.7+.22*Math.Sin(t*.8)),1=>.55*Math.Cos(t*11)+.18*Math.Sin(t*29),_=>.35*Math.Sin(t*3)+.7 };
+    private void AppendStream()
+    {
+        if(_buffers.Length!=3) return;
+        using var update=Document.BeginUpdate();
+        for(var channel=0;channel<3;channel++)
+        {
+            var buffer=_buffers[channel]; var first=buffer.SamplesWritten; var batch=new double[64];
+            for(var i=0;i<batch.Length;i++) batch[i]=Signal((first+i)*.0005,channel);
+            buffer.Append(batch); ((LineSeries)Document.Series[channel]).Data=buffer.Snapshot();
+        }
+        var end=(_buffers[0].SamplesWritten-1)*.0005; Document.XAxis.Range=new(end-10,end);
+    }
+    private void UpdateStatus()
+    {
+        var frame=Chart.Frame;
+        _status.Text=LastCommandError??Chart.LastError??$"{Chart.Backend}    |    {Document.TotalPoints:N0} source values    |    {frame?.Metadata.VertexCount??0:N0} vertices    |    compile {Chart.CompileMilliseconds:F2} ms    |    {Current.Category}";
+    }
+    private async void Export(string type)
+    {
+        try
+        {
+            byte[] bytes; string mime;
+            if(type=="png") { bytes=Chart.ExportPng(2); mime="image/png"; }
+            else if(type=="csv")
+            {
+                var data=Document.Series.OfType<DataSeries>().FirstOrDefault()?.Data??throw new NotSupportedException("CSV export currently requires an XY data series.");
+                bytes=Encoding.UTF8.GetBytes(CsvData.Write(data)); mime="text/csv";
+            }
+            else { bytes=Encoding.UTF8.GetBytes(Chart.Frame?.MetadataJson()??throw new InvalidOperationException("No rendered frame.")); mime="application/json"; }
+            await SaveFile(bytes,Current.Id+"."+type,mime,"."+type); LastCommandError=null;
+        }
+        catch(Exception e) { LastCommandError=e.Message; }
+        UpdateStatus();
+    }
+    private static async Task SaveFile(byte[] bytes,string name,string mime,string extension)
+    {
+#if __WASM__
+        var base64=Convert.ToBase64String(bytes);
+        global::Uno.Foundation.WebAssemblyRuntime.InvokeJS($"(()=>{{const s=atob('{base64}');const b=Uint8Array.from(s,c=>c.charCodeAt(0));const u=URL.createObjectURL(new Blob([b],{{type:'{mime}'}}));const a=document.createElement('a');a.href=u;a.download='{name}';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}})();");
+        await Task.CompletedTask;
+#else
+        var picker=new FileSavePicker { SuggestedFileName=name }; picker.FileTypeChoices.Add("Chart export",new List<string> { extension });
+        var file=await picker.PickSaveFileAsync(); if(file!=null) await FileIO.WriteBytesAsync(file,bytes);
+#endif
+    }
+}

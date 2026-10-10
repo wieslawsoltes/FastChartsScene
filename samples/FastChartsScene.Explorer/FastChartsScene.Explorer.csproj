@@ -8,5 +8,5 @@
     <WasmShellWebAppBasePath>/FastChartsScene/</WasmShellWebAppBasePath><WasmShellEnablePWA>false</WasmShellEnablePWA>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
-  <ItemGroup><ProjectReference Include="../../src/FastChartsScene.Controls.Uno/FastChartsScene.Controls.Uno.csproj" /><ProjectReference Include="../../src/FastChartsScene.SignalProcessing/FastChartsScene.SignalProcessing.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../src/FastChartsScene.Controls.Uno/FastChartsScene.Controls.Uno.csproj" /><ProjectReference Include="../../src/FastChartsScene.Examples/FastChartsScene.Examples.csproj" /></ItemGroup>
 </Project>
