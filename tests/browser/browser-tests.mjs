@@ -50,7 +50,13 @@ async function open(dpr) {
     const exports=await globalThis.Module.getAssemblyExports('FastChartsScene.Explorer');
     globalThis.chartBridge=exports.FastChartsScene.Explorer.BrowserBridge;
   });
-  await waitFor(s=>s.bounds.width>100&&s.vertices>0&&s.gpuSubmissions>0&&s.backend.startsWith('OpenGL'),'GPU presentation',180000);
+  // Assembly exports become available before Uno calls Application.OnLaunched.
+  // Only this startup gate tolerates the specific not-yet-created managed page.
+  await page.waitForFunction(()=>{
+    try { const state=JSON.parse(globalThis.chartBridge.Inspect()); return state.bounds.width>100; }
+    catch(error) { if(String(error).includes('Explorer not initialized')) return false; throw error; }
+  },undefined,{timeout:180000});
+  await waitFor(s=>s.vertices>0&&s.gpuSubmissions>0&&s.backend.startsWith('OpenGL'),'GPU presentation',180000);
   return context;
 }
 async function select(id) {
@@ -64,7 +70,6 @@ async function image(name,state=undefined) {
   let colored=0;
   for(let y=Math.max(0,Math.ceil(b.y+p.y+3));y<Math.min(png.height,Math.floor(b.y+p.y+p.height-3));y++)
     for(let x=Math.max(0,Math.ceil(b.x+p.x+3));x<Math.min(png.width,Math.floor(b.x+p.x+p.width-3));x++) {
-      // Exclude the legend region: colored legend swatches are not proof that chart geometry rendered.
       if(x>b.x+p.x+p.width-185&&y<b.y+p.y+100) continue;
       const at=(y*png.width+x)*4; const r=png.data[at],g=png.data[at+1],blue=png.data[at+2];
       if(Math.max(r,g,blue)-Math.min(r,g,blue)>45&&Math.max(r,g,blue)>75) colored++;
