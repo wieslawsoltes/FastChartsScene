@@ -1,14 +1,12 @@
 <Project Sdk="Uno.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net10.0-browserwasm;net10.0-desktop</TargetFrameworks>
-    <OutputType>Library</OutputType><UnoSingleProject>true</UnoSingleProject>
-    <IsPackable>true</IsPackable>
+    <OutputType>Library</OutputType><UnoSingleProject>true</UnoSingleProject><IsPackable>true</IsPackable>
     <UnoFeatures>SkiaRenderer;GLCanvas;</UnoFeatures>
   </PropertyGroup>
-  <!-- Keep the graphics add-in aligned with the Uno runtime selected by Uno.Sdk.
-       Browser GLCanvas support requires Uno 6.7 or newer. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-browserwasm'">
-    <_UnoProjectSystemPackageReference Include="Uno.WinUI.Graphics3DGL" ProjectSystem="true" />
+    <Compile Remove="ChartGlSurface.cs;GlQueries.cs" />
+    <EmbeddedResource Include="Browser/webgl.js" LogicalName="FastChartsScene.Controls.Uno.Browser.webgl.js" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../FastChartsScene.Interaction/FastChartsScene.Interaction.csproj" />
