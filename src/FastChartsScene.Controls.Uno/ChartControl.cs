@@ -15,7 +15,7 @@ namespace FastChartsScene.Controls.Uno;
 public enum ChartRenderingMode { Auto, OpenGL, Skia }
 
 /// <summary>Reusable Uno chart control. Owns renderer resources, but never disposes the caller's document.</summary>
-public sealed class ChartControl : UserControl,IDisposable
+public sealed partial class ChartControl : UserControl,IDisposable
 {
     public static readonly DependencyProperty DocumentProperty=DependencyProperty.Register(nameof(Document),typeof(ChartDocument),typeof(ChartControl),new PropertyMetadata(null,DocumentChanged));
     public static readonly DependencyProperty RenderingModeProperty=DependencyProperty.Register(nameof(RenderingMode),typeof(ChartRenderingMode),typeof(ChartControl),new PropertyMetadata(ChartRenderingMode.Auto,(d,_)=>((ChartControl)d).RequestDraw()));
@@ -57,7 +57,7 @@ public sealed class ChartControl : UserControl,IDisposable
         _gpu.Rendered+=()=>RenderCompleted?.Invoke(this,EventArgs.Empty); _overlay.Rendered+=()=>RenderCompleted?.Invoke(this,EventArgs.Empty);
         Loaded+=OnLoaded; Unloaded+=OnUnloaded; SizeChanged+=(_,_)=>RequestDraw();
         PointerPressed+=Pressed; PointerMoved+=Moved; PointerReleased+=Released; PointerCanceled+=Canceled; PointerCaptureLost+=CaptureLost;
-        PointerWheelChanged+=Wheel; PointerExited+=(_,_)=> { if(_pointers.Count==0) { _overlay.Cursor=null; _overlay.Hit=null; SetScalarHit(null); _overlay.Invalidate(); } };
+        PointerWheelChanged+=Wheel; PointerExited+=(_,_)=> { if(_pointers.Count==0) { _overlay.Cursor=null; SetDataHit(null); SetScalarHit(null); _overlay.Invalidate(); } };
         DoubleTapped+=(_,e)=> { Safe(()=>_input?.ResetView()); e.Handled=true; }; RightTapped+=(_,e)=>e.Handled=true; KeyDown+=Key;
         ManipulationMode=ManipulationModes.None;
     }
@@ -67,7 +67,7 @@ public sealed class ChartControl : UserControl,IDisposable
         if(e.OldValue is ChartDocument old) old.Changed-=c.OnModelChanged;
         c.Cancel(); c._compiler.ClearCache(); c._input=e.NewValue is ChartDocument current?new ChartInteraction(current):null;
         if(c._attached&&e.NewValue is ChartDocument d) d.Changed+=c.OnModelChanged;
-        c.Frame=null; c._overlay.Cursor=null; c._overlay.Hit=null; c.SetScalarHit(null); c.RequestDraw();
+        c.Frame=null; c._overlay.Cursor=null; c.SetDataHit(null); c.SetScalarHit(null); c.RequestDraw();
     }
     private void OnLoaded(object sender,RoutedEventArgs e)
     {
@@ -80,7 +80,7 @@ public sealed class ChartControl : UserControl,IDisposable
     {
         _attached=false; if(Document is { } d) d.Changed-=OnModelChanged;
         if(_observedRoot!=null) _observedRoot.Changed-=RootChanged; _observedRoot=null;
-        Cancel(); _overlay.Cursor=null; _overlay.Hit=null; SetScalarHit(null); _overlay.Reset(); _compiler.ClearCache();
+        Cancel(); _overlay.Cursor=null; SetDataHit(null); SetScalarHit(null); _overlay.Reset(); _compiler.ClearCache(); _input?.ClearPickingCache();
     }
     private void RootChanged(XamlRoot sender,XamlRootChangedEventArgs args)=>RequestDraw();
     private void OnModelChanged(object? sender,EventArgs e)=>RequestDraw();
@@ -114,9 +114,9 @@ public sealed class ChartControl : UserControl,IDisposable
         _gpu.Frame=Frame; _overlay.Frame=Frame;
         if(Frame is { } current && _overlay.Cursor is { } cursor && _input!=null)
         {
-            Safe(()=> { _overlay.Hit=_input.HitTestData(current,cursor); SetScalarHit(_input.HitTestScalar(current,cursor)); });
+            Safe(()=> { SetDataHit(_input.HitTestData(current,cursor)); SetScalarHit(_input.HitTestScalar(current,cursor)); });
         }
-        else SetScalarHit(null);
+        else { SetDataHit(null); SetScalarHit(null); }
         if(gpu) _gpu.Invalidate(); _overlay.Invalidate(); FrameChanged?.Invoke(this,EventArgs.Empty);
     }
     private static PointD Point(PointerRoutedEventArgs e,UIElement relative)
@@ -151,7 +151,7 @@ public sealed class ChartControl : UserControl,IDisposable
             else { _pointers[id]=p; Safe(()=>_input.Pan(frame,_first,p.X-_last.X,p.Y-_last.Y)); }
             _last=p; e.Handled=true;
         }
-        _overlay.Cursor=p; Safe(()=> { _overlay.Hit=_input.HitTestData(frame,p); SetScalarHit(_input.HitTestScalar(frame,p)); }); _overlay.Invalidate();
+        _overlay.Cursor=p; Safe(()=> { SetDataHit(_input.HitTestData(frame,p)); SetScalarHit(_input.HitTestScalar(frame,p)); }); _overlay.Invalidate();
     }
     private void Released(object sender,PointerRoutedEventArgs e)
     {
@@ -199,6 +199,9 @@ public sealed class ChartControl : UserControl,IDisposable
     {
         if(_disposed) return; OnUnloaded(this,new RoutedEventArgs()); _disposed=true;
         _gpu.UnregisterPropertyChangedCallback(ChartGlSurface.IsGLInitializedProperty,_glCallback); _overlay.Dispose();
-        Content=null; Frame=null; _gpu.Frame=null; _overlay.Frame=null;
+        Content=null; Frame=null; _gpu.Frame=null; _overlay.Frame=null; _input=null;
+#if __WASM__
+        _gpu.Dispose();
+#endif
     }
 }

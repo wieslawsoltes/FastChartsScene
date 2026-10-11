@@ -14,9 +14,9 @@ public sealed partial class ChartInteraction
     /// Transparent gaps/outliers allow picking an underlying heatmap; contours and 3D need separate picking tools.</summary>
     public ScalarDataHit? HitTestScalar(RenderFrame frame, PointD location)
     {
-        ArgumentNullException.ThrowIfNull(frame);
+        ArgumentNullException.ThrowIfNull(frame); ObjectDisposedException.ThrowIf(_document.IsDisposed, _document);
         if (!location.IsFinite) throw new ArgumentOutOfRangeException(nameof(location));
-        if (_document.View != ChartView.XY || !frame.Layout.Plot.Contains(location)) return null;
+        if (_document.View != ChartView.XY || frame.Metadata.Revision != _document.Revision || !frame.Layout.Plot.Contains(location)) return null;
         if (frame.Metadata.Hits.Any(h => h.Kind == "legend" && h.Bounds.Contains(location))) return null;
         foreach (var series in _document.Series.Reverse().OfType<HeatmapSeries>().Where(s => s.Visible && s.GetType() == typeof(HeatmapSeries)))
         {

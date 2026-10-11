@@ -7,8 +7,12 @@ internal static partial class Program
     {
         foreach(var example in ExampleCatalog.All)
             Add("example compiles: "+example.Id,()=> { using var d=example.Create(); var f=new SceneCompiler().Compile(d,1280,720); f.Validate(); True(f.Metadata.VertexCount>0); True(d.Validate().Count==0); });
+        RegisterPointPickingTests(); RegisterInteractionReviewTests(); RegisterOrderedCursorTests();
         RegisterAutoFitTests(); RegisterExportTests(); RegisterAxisImprovementTests(); RegisterRasterTests(); RegisterIntensityTests(); RegisterPerformanceReviewTests(); RegisterCompletionReviewTests(); RegisterSpectrogramReviewTests();
     }
+    static partial void RegisterPointPickingTests();
+    static partial void RegisterInteractionReviewTests();
+    static partial void RegisterOrderedCursorTests();
     static partial void RegisterSpectrogramReviewTests();
     static partial void RegisterCompletionReviewTests();
     static partial void RegisterAutoFitTests();
