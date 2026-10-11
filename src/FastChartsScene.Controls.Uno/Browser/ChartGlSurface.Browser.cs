@@ -75,11 +75,12 @@ internal sealed partial class ChartGlSurface : SKCanvasElement
         if(_contextCreated) { Destroy(_id); _contextCreated=false; }
         _bitmap?.Dispose(); _bitmap=null; _pixels=[]; _uploaded=_drawn=null; _width=_height=0; IsGLInitialized=null;
     }
-    [JSImport("FastChartsSceneWebGL.create","globalThis")]
+    // Global functions use a globalThis-qualified name, with no ES-module argument.
+    [JSImport("globalThis.FastChartsSceneWebGL.create")]
     private static partial string Create(int id);
-    [JSImport("FastChartsSceneWebGL.draw","globalThis")]
+    [JSImport("globalThis.FastChartsSceneWebGL.draw")]
     private static partial void Draw(int id,[JSMarshalAs<JSType.MemoryView>] Span<byte> vertices,string metadata,int width,int height,[JSMarshalAs<JSType.MemoryView>] Span<byte> pixels);
-    [JSImport("FastChartsSceneWebGL.destroy","globalThis")]
+    [JSImport("globalThis.FastChartsSceneWebGL.destroy")]
     private static partial void Destroy(int id);
 }
 #endif
