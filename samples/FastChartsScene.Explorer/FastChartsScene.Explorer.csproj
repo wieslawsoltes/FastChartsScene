@@ -12,5 +12,6 @@
     <ProjectReference Include="../../src/FastChartsScene.Controls.Uno/FastChartsScene.Controls.Uno.csproj" />
     <ProjectReference Include="../../src/FastChartsScene.Examples/FastChartsScene.Examples.csproj" />
     <ProjectReference Include="../../src/FastChartsScene.Serialization/FastChartsScene.Serialization.csproj" />
+    <ProjectReference Include="../../src/FastChartsScene.Export/FastChartsScene.Export.csproj" />
   </ItemGroup>
 </Project>

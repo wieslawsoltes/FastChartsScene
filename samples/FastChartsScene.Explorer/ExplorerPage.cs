@@ -1,10 +1,10 @@
-using System.Globalization;
 using System.Text;
 using FastChartsScene.Charts;
 using FastChartsScene.Controls.Uno;
 using FastChartsScene.Core;
 using FastChartsScene.Data;
 using FastChartsScene.Examples;
+using FastChartsScene.Export;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -72,6 +72,8 @@ public sealed partial class ExplorerPage : Page
         toolbar.Children.Add(Button("Redo",()=>Execute(()=>Chart.Interaction?.Redo())));
         toolbar.Children.Add(Button("PNG",()=>Export("png")));
         toolbar.Children.Add(Button("CSV",()=>Export("csv")));
+        toolbar.Children.Add(Button("SVG",()=>Export("svg")));
+        toolbar.Children.Add(Button("All data CSV",()=>Export("allcsv")));
         toolbar.Children.Add(Button("Save chart",SaveDocument));
         toolbar.Children.Add(Button("Open chart",OpenDocument));
         toolbar.Children.Add(Button("Frame JSON",()=>Export("json")));
@@ -115,7 +117,7 @@ public sealed partial class ExplorerPage : Page
         var example=ExampleCatalog.Find(id); var next=example.Create(); var old=Chart.Document;
         SetStreaming(false); _buffers=[]; Current=example; Chart.Document=next; old?.Dispose();
         _selecting=true; _examples.SelectedItem=example; _selecting=false;
-        _description.Text=example.Description+"\n\nControls: drag to pan or orbit; wheel/pinch to zoom; Shift-drag for rectangle zoom; Home to fit; Z / Y to undo / redo. Click a legend entry to toggle its series.\n\nThis preview is not full LightningChart API, feature, visual, or performance parity.";
+        _description.Text=example.Description+"\n\nControls: drag to pan or orbit; wheel/pinch to zoom; Shift-drag for rectangle zoom; Home to fit; Z / Y to undo / redo. Click a legend entry to toggle its series.\n\nPNG includes 2D and depth-tested 3D. SVG preserves 2D vectors. CSV saves the first XY series; All data CSV saves every supported series.\n\nThis preview is not full LightningChart API, feature, visual, or performance parity.";
         _usage.Text=$"using FastChartsScene.Examples;\nusing FastChartsScene.Controls.Uno;\n\nvar document = ExampleCatalog.Find(\"{id}\").Create();\nvar chart = new ChartControl {{ Document = document }};\n// Document is caller-owned; dispose it after detaching.\n// Package: FastChartsScene.Controls.Uno";
         _play.IsEnabled=id is "signals" or "streaming";
         var first=next.Series.OfType<DataSeries>().FirstOrDefault();
@@ -194,15 +196,17 @@ public sealed partial class ExplorerPage : Page
     {
         try
         {
-            byte[] bytes; string mime;
+            byte[] bytes; string mime; var extension=type=="allcsv"?"csv":type;
             if(type=="png") { bytes=Chart.ExportPng(2); mime="image/png"; }
             else if(type=="csv")
             {
-                var data=Document.Series.OfType<DataSeries>().FirstOrDefault()?.Data??throw new NotSupportedException("CSV export currently requires an XY data series.");
+                var data=Document.Series.OfType<DataSeries>().FirstOrDefault()?.Data??throw new NotSupportedException("Use All data CSV to export financial, grid or 3D series.");
                 bytes=Encoding.UTF8.GetBytes(CsvData.Write(data)); mime="text/csv";
             }
+            else if(type=="allcsv") { bytes=Encoding.UTF8.GetBytes(ChartDataExport.WriteCsv(Document)); mime="text/csv"; }
+            else if(type=="svg") { bytes=Encoding.UTF8.GetBytes(SvgExport.Write(Chart.Frame??throw new InvalidOperationException("No rendered frame."))); mime="image/svg+xml"; }
             else { bytes=Encoding.UTF8.GetBytes(Chart.Frame?.MetadataJson()??throw new InvalidOperationException("No rendered frame.")); mime="application/json"; }
-            await SaveFile(bytes,Current.Id+"."+type,mime,"."+type); LastCommandError=null;
+            await SaveFile(bytes,Current.Id+(type=="allcsv"?"-all":"")+"."+extension,mime,"."+extension); LastCommandError=null;
         }
         catch(Exception e) { LastCommandError=e.Message; }
         UpdateStatus();

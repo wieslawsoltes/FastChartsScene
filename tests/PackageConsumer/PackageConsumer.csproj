@@ -1,14 +1,9 @@
 <Project Sdk="Uno.Sdk">
-  <PropertyGroup>
-    <TargetFrameworks>net10.0-browserwasm;net10.0-desktop</TargetFrameworks>
-    <OutputType>Library</OutputType>
-    <UnoSingleProject>true</UnoSingleProject>
-    <UnoFeatures>SkiaRenderer;GLCanvas;</UnoFeatures>
-    <IsPackable>false</IsPackable>
-  </PropertyGroup>
+  <PropertyGroup><TargetFrameworks>net10.0-desktop;net10.0-browserwasm</TargetFrameworks><OutputType>Library</OutputType><UnoSingleProject>true</UnoSingleProject><UnoFeatures>SkiaRenderer;GLCanvas;</UnoFeatures><IsPackable>false</IsPackable></PropertyGroup>
   <ItemGroup>
     <PackageReference Include="FastChartsScene.Controls.Uno" Version="0.1.0" />
     <PackageReference Include="FastChartsScene.Examples" Version="0.1.0" />
     <PackageReference Include="FastChartsScene.Serialization" Version="0.1.0" />
+    <PackageReference Include="FastChartsScene.Export" Version="0.1.0" />
   </ItemGroup>
 </Project>
