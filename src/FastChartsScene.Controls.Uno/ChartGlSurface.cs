@@ -1,6 +1,7 @@
 using FastChartsScene.Core;
 using FastChartsScene.Rendering;
 using Silk.NET.OpenGL;
+using Windows.Foundation;
 using global::Uno.WinUI.Graphics3DGL;
 
 namespace FastChartsScene.Controls.Uno;
@@ -16,7 +17,18 @@ internal sealed class ChartGlSurface : GLCanvasElement
     public string? Error { get; private set; }
     public long Submissions { get; private set; }
     public event Action? Rendered;
-    public ChartGlSurface():base(null) { IsHitTestVisible=false; }
+    public ChartGlSurface():base(null)
+    {
+        IsHitTestVisible=false;
+        // Uno 6.7.135 initializes its FBO during Loaded, before a Canvas child has necessarily
+        // been arranged. Give only that initial state a valid backing size. The owning control
+        // replaces it with the actual device-pixel dimensions on its next layout pass.
+        Loading+=(_,_)=>
+        {
+            if(RenderSize.Width>=1&&RenderSize.Height>=1) return;
+            Measure(new Size(1,1)); Arrange(new Rect(0,0,1,1));
+        };
+    }
     private uint Shader(GL gl,ShaderType type,string body)
     {
         var shader=gl.CreateShader(type);
@@ -82,7 +94,6 @@ internal sealed class ChartGlSurface : GLCanvasElement
     protected override unsafe void RenderOverride(GL gl)
     {
         if(Frame is not { } frame||_program==0) return;
-        // Uno shares this context with Skia. Preserve every state that this renderer changes.
         var oldProgram=gl.GetInteger(GetPName.CurrentProgram); var oldVao=gl.GetInteger(GetPName.VertexArrayBinding);
         var oldBuffer=gl.GetInteger(GetPName.ArrayBufferBinding); var oldDepth=gl.GetInteger(GetPName.DepthFunc);
         var oldDepthMask=gl.GetInteger(GetPName.DepthWritemask)!=0;
@@ -92,9 +103,10 @@ internal sealed class ChartGlSurface : GLCanvasElement
         var equationRgb=gl.GetInteger(GetPName.BlendEquationRgb); var equationAlpha=gl.GetInteger(GetPName.BlendEquationAlpha);
         int* oldScissor=stackalloc int[4]; gl.GetInteger(GetPName.ScissorBox,oldScissor);
         float* oldClear=stackalloc float[4]; gl.GetFloat(GetPName.ColorClearValue,oldClear);
+        int* colorMask=stackalloc int[4]; gl.GetInteger(GetPName.ColorWritemask,colorMask);
         try
         {
-            gl.Disable(EnableCap.ScissorTest); gl.Disable(EnableCap.CullFace); gl.DepthMask(true);
+            gl.Disable(EnableCap.ScissorTest); gl.Disable(EnableCap.CullFace); gl.DepthMask(true); gl.ColorMask(true,true,true,true);
             var background=ColorRgba.Parse(frame.Metadata.Background); gl.ClearColor(background.R,background.G,background.B,background.A);
             gl.Clear(ClearBufferMask.ColorBufferBit|ClearBufferMask.DepthBufferBit);
             gl.UseProgram(_program); gl.BindVertexArray(_vao); gl.BindBuffer(BufferTargetARB.ArrayBuffer,_vbo);
@@ -124,7 +136,7 @@ internal sealed class ChartGlSurface : GLCanvasElement
         finally
         {
             gl.UseProgram((uint)oldProgram); gl.BindVertexArray((uint)oldVao); gl.BindBuffer(BufferTargetARB.ArrayBuffer,(uint)oldBuffer);
-            gl.DepthFunc((DepthFunction)oldDepth); gl.DepthMask(oldDepthMask);
+            gl.DepthFunc((DepthFunction)oldDepth); gl.DepthMask(oldDepthMask); gl.ColorMask(colorMask[0]!=0,colorMask[1]!=0,colorMask[2]!=0,colorMask[3]!=0);
             gl.BlendFuncSeparate((BlendingFactor)srcRgb,(BlendingFactor)dstRgb,(BlendingFactor)srcAlpha,(BlendingFactor)dstAlpha);
             gl.BlendEquationSeparate((BlendEquationModeEXT)equationRgb,(BlendEquationModeEXT)equationAlpha);
             gl.Scissor(oldScissor[0],oldScissor[1],(uint)oldScissor[2],(uint)oldScissor[3]); gl.ClearColor(oldClear[0],oldClear[1],oldClear[2],oldClear[3]);

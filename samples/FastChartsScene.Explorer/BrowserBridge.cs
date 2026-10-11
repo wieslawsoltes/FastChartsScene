@@ -10,13 +10,13 @@ using System.Runtime.InteropServices.JavaScript;
 
 namespace FastChartsScene.Explorer;
 
-public sealed record AxisState(string Id,double Minimum,double Maximum);
+public sealed partial record AxisState(string Id,double Minimum,double Maximum);
 public sealed record BrowserState(string Example,string View,string Backend,string? Error,bool Streaming,long Revision,long SourcePoints,int Vertices,long GpuSubmissions,long OverlayDraws,double CompileMilliseconds,RectD Bounds,RectD Plot,AxisState[] Axes,string[] Examples,int SeriesCount,bool Grid,bool Legend,bool Orthographic);
 [JsonSourceGenerationOptions(PropertyNamingPolicy=JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(BrowserState))]
 internal partial class BrowserJsonContext : JsonSerializerContext { }
 
-/// <summary>Same-origin diagnostic exports for automated tests and host integrations. No network or filesystem access.</summary>
+/// <summary>Same-origin diagnostics for tests and host integrations. No network or filesystem access.</summary>
 public static partial class BrowserBridge
 {
     internal static ExplorerPage? Page { get; set; }
