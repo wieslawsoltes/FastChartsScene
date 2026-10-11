@@ -44,7 +44,7 @@ public sealed class PropertyGridControl : UserControl
         if (!_sections.TryGetValue(category, out var section))
         {
             var label = new TextBlock { Text = category, FontSize = 11, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-            var arrow = new SymbolIcon(Symbol.Forward) { Width = 12, Height = 12, RenderTransformOrigin = new Windows.Foundation.Point(.5, .5), RenderTransform = new RotateTransform { Angle = 90 } };
+            var arrow = new Viewbox { Child = new SymbolIcon(Symbol.Forward), Width = 12, Height = 12, RenderTransformOrigin = new Windows.Foundation.Point(.5, .5), RenderTransform = new RotateTransform { Angle = 90 } };
             var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
             heading.Children.Add(arrow); heading.Children.Add(label);
             var button = new Button { Content = heading, HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -114,11 +114,11 @@ public sealed class PropertyGridControl : UserControl
     }
     private static SolidColorBrush Fill(byte v) => new(Windows.UI.Color.FromArgb(255, v, v, v));
     private sealed record Row(string Category, string Name, string Description, FrameworkElement Editor, Grid Host);
-    private sealed class Section(StackPanel host, Button button, SymbolIcon arrow, StackPanel rows)
+    private sealed class Section(StackPanel host, Button button, Viewbox arrow, StackPanel rows)
     {
         public StackPanel Host { get; } = host;
         public Button Button { get; } = button;
-        public SymbolIcon Arrow { get; } = arrow;
+        public Viewbox Arrow { get; } = arrow;
         public StackPanel Rows { get; } = rows;
         public bool Expanded { get; set; } = true;
         public List<Row> Items { get; } = [];

@@ -30,7 +30,7 @@ public static partial class BrowserBridge
 #if __WASM__
     [JSExport]
 #endif
-    public static void BringPropertyIntoView(string category, string name) => PropertyElement(category, name).StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = .5 });
+    public static void BringPropertyIntoView(string category, string name) => PropertyElement(category, name).StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = 0 });
 #if __WASM__
     [JSExport]
 #endif

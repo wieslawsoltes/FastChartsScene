@@ -8,14 +8,14 @@ export async function validateProperties(page,{inspect,scenario,output}) {
  const saved=()=>page.evaluate(()=>JSON.parse(globalThis.chartBridge.ExportDocument()));
  const frames=()=>page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
  async function bounds(read){
-  const end=Date.now()+10000;let last=null,since=0;
+  const end=Date.now()+10000;let last=null,raw=null,since=0;
   while(Date.now()<end){
-   await frames();const b=await read(),v=page.viewportSize();
+   await frames();const b=await read(),v=page.viewportSize();raw=b;
    const visible=b&&b.width>1&&b.height>1&&b.x>=0&&b.y>=0&&b.x+b.width<=v.width+1&&b.y+b.height<=v.height+1;
    if(!visible||!last||!['x','y','width','height'].every(k=>Math.abs(b[k]-last[k])<.1))since=Date.now();
    if(visible&&last&&Date.now()-since>=160)return b;last=visible?b:null;
   }
-  throw new Error('Property control did not become actionable: '+JSON.stringify(last));
+  throw new Error('Property control did not become actionable: '+JSON.stringify(raw));
  }
  async function click(category,name){
   await page.evaluate(([c,n])=>globalThis.chartBridge.BringPropertyIntoView(c,n),[category,name]);
@@ -54,8 +54,10 @@ export async function validateProperties(page,{inspect,scenario,output}) {
   await click('Series','$group');await page.waitForFunction(n=>JSON.parse(globalThis.chartBridge.InspectProperties()).visibleRows===n,s.rows);
  });
  await scenario('properties: native title editing updates the rendered and saved document',async()=>{
+  const before=await inspect();
   await text('Chart','Title','Measured <signal> "A"');
   await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.ExportDocument()).title==='Measured <signal> "A"');
+  await page.waitForFunction(p=>{const s=JSON.parse(globalThis.chartBridge.Inspect());return s.gpuSubmissions>p.gpuSubmissions||s.overlayDraws>p.overlayDraws;},before);
   const title=await page.evaluate(()=>JSON.parse(globalThis.chartBridge.PropertyBounds('Chart','Title')));
   assert(title.width<190&&title.height<50,'Property values should fit compact two-column rows');
   await page.screenshot({path:resolve(output,'properties-editor.png'),scale:'css'});
