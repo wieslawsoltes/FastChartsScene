@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {validateProperties} from './property-grid-tests.mjs';
 import {resolve} from 'node:path';
 import {readFile} from 'node:fs/promises';
 import {execFileSync} from 'node:child_process';
@@ -148,4 +149,5 @@ export async function validateGallery(page,{inspect,scenario,output}){
   if(process.env.RENDER_MODE==='Skia')await page.evaluate(()=>globalThis.chartBridge.Command('backend','Skia'));
   await view(true);await entry('signals');await click('Open example');await page.waitForFunction(()=>!JSON.parse(globalThis.chartBridge.InspectGallery()).open);
  });
+ await validateProperties(page,{inspect,scenario,output});
 }

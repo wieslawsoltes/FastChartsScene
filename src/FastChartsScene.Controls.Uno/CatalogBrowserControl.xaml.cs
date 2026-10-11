@@ -73,7 +73,17 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
     public int PendingPreviews => _requests.Count;
     public int GeneratedPreviews { get; private set; }
     public int PreviewErrors { get; private set; }
-    public Func<CatalogEntry, CancellationToken, Task<ImageSource?>>? PreviewProvider { get; set; }
+    private Func<CatalogEntry, CancellationToken, Task<ImageSource?>>? _previewProvider;
+    public Func<CatalogEntry, CancellationToken, Task<ImageSource?>>? PreviewProvider
+    {
+        get => _previewProvider;
+        set
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (ReferenceEquals(_previewProvider, value)) return;
+            _previewProvider = value; InvalidatePreviews();
+        }
+    }
     public event EventHandler<CatalogEntry>? OpenRequested;
     public event EventHandler? SelectionUpdated;
     public event EventHandler? ExportFavoritesRequested;
@@ -88,14 +98,15 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
         LayoutUpdated += (_, _) => ApplyPendingScroll();
         _debounce.Tick += (_, _) => { _debounce.Stop(); ApplyFilter(); };
         SizeChanged += (_, _) => { var compact = ActualWidth < 850; PreviewColumn.Width = new GridLength(compact ? 0 : 300); PreviewPane.Visibility = compact ? Visibility.Collapsed : Visibility.Visible; };
-        Unloaded += (_, _) => { DetachModel(); SuspendPreviews(); };
+        Unloaded += (_, _) => { if (!_disposed) { DetachModel(); SuspendPreviews(); } };
         Loaded += (_, _) => { if (!_disposed && _model != null) { AttachModel(); ApplyFilter(); RefreshPreviews(); } };
     }
     public void SetModel(CatalogBrowserModel model, string? selectedId = null)
     {
         ArgumentNullException.ThrowIfNull(model); ObjectDisposedException.ThrowIf(_disposed, this);
+        var selection = selectedId == null ? model.Entries.FirstOrDefault() : model.Find(selectedId);
         DetachModel();
-        SuspendPreviews(); _model = model; if (IsLoaded) AttachModel();
+        SuspendPreviews(); _pendingScroll = null; _model = model; if (IsLoaded) AttachModel();
         _cards.Clear(); _previewLru.Clear(); _failed.Clear(); _lastEntries = null; _tags.Clear(); _tagButtons.Clear(); TagButtons.Children.Clear();
         foreach (var entry in model.Entries) { var card = new CatalogCard(entry); card.SetFavorite(model.IsFavorite(entry.Id)); _cards.Add(entry.Id, card); }
         _sync = true;
@@ -108,18 +119,20 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
             _tagButtons.Add(tag, button); TagButtons.Children.Add(button);
         }
         _sync = false;
-        SelectedEntry = selectedId == null ? model.Entries.FirstOrDefault() : model.Find(selectedId);
+        SelectedEntry = selection;
         ApplyFilter();
     }
     public void SelectEntry(string id)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (_model == null) return;
         SelectedEntry = _model.Find(id); UpdateSelected();
         _sync = true; Tiles.SelectedItem = List.SelectedItem = _cards[id]; _sync = false;
     }
-    public void SetSearch(string query) { Search.Text = query; _debounce.Stop(); ApplyFilter(); }
+    public void SetSearch(string query) { ObjectDisposedException.ThrowIf(_disposed, this); ArgumentNullException.ThrowIfNull(query); if (query.Length > 512) throw new ArgumentException("Search text is limited to 512 characters.", nameof(query)); Search.Text = query; _debounce.Stop(); ApplyFilter(); }
     public void ResetFilters()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         _sync = true; Search.Text = ""; Category.SelectedIndex = 0; FavoritesOnly.IsChecked = false; TagMode.SelectedIndex = 0;
         _tags.Clear(); foreach (var button in _tagButtons.Values) button.IsChecked = false;
         _sync = false; _debounce.Stop(); ApplyFilter();
@@ -167,12 +180,12 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
     private void FavoritesChanged(object? sender, EventArgs args) => ApplyFilter();
     private void SelectionChanged(object sender, SelectionChangedEventArgs args)
     {
-        if (_sync || sender is not ListViewBase { SelectedItem: CatalogCard card }) return;
+        if (_disposed || _sync || sender is not ListViewBase { SelectedItem: CatalogCard card }) return;
         SelectEntry(card.Id);
     }
     private void ExportFavoritesClicked(object sender, RoutedEventArgs args) => ExportFavoritesRequested?.Invoke(this, EventArgs.Empty);
     private void ImportFavoritesClicked(object sender, RoutedEventArgs args) => ImportFavoritesRequested?.Invoke(this, EventArgs.Empty);
-    public void FocusSearch() => Search.Focus(FocusState.Programmatic);
+    public void FocusSearch() { ObjectDisposedException.ThrowIf(_disposed, this); Search.Focus(FocusState.Programmatic); }
     public void RefreshPreviews()
     {
         if (_disposed || !IsLoaded || Visibility != Visibility.Visible) return;
@@ -180,8 +193,11 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
         {
             if (_disposed || !IsLoaded || Visibility != Visibility.Visible) return;
             var view = IsTileView ? (ListViewBase)Tiles : List;
-            foreach (var entry in (_lastEntries ?? []).Take(128))
-                if (view.ContainerFromItem(_cards[entry.Id]) is FrameworkElement) RequestPreview(_cards[entry.Id]);
+            // Enumerate realized containers, not a prefix of source indices. Scrolled views
+            // beyond item 128 must refresh too, without an O(catalog size) walk.
+            if (view.ItemsPanelRoot is { } panel)
+                foreach (var child in panel.Children)
+                    if (child is SelectorItem { Content: CatalogCard card }) RequestPreview(card);
             if (SelectedEntry != null) RequestPreview(_cards[SelectedEntry.Id]);
         });
     }
@@ -203,6 +219,7 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
     private void ListClicked(object sender, RoutedEventArgs args) => ChangeView(false);
     public void ChangeView(bool tiles)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         SuspendPreviews(); IsTileView = tiles; Tiles.Visibility = tiles ? Visibility.Visible : Visibility.Collapsed; List.Visibility = tiles ? Visibility.Collapsed : Visibility.Visible;
         // A previously collapsed virtualizing panel may not have a layout yet. Keep the
         // request until its real panel is arranged instead of dropping early navigation.
@@ -278,12 +295,13 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
     }
     public void SuspendPreviews()
     {
+        if (_disposed) return;
         _generation++; _cancel.Cancel(); _cancel.Dispose(); _cancel = new(); _requests.Clear(); _pending.Clear(); _debounce.Stop();
     }
     public new void Dispose()
     {
-        if (_disposed) return; _disposed = true; SuspendPreviews(); _cancel.Dispose();
+        if (_disposed) return; SuspendPreviews(); _disposed = true; _cancel.Dispose();
         DetachModel();
-        Tiles.ItemsSource = List.ItemsSource = null; _cards.Clear(); _previewLru.Clear(); SelectedImage.Source = null; _model = null;
+        Tiles.ItemsSource = List.ItemsSource = null; _cards.Clear(); _previewLru.Clear(); SelectedImage.Source = null; SelectedEntry = null; _lastEntries = null; _pendingScroll = null; _failed.Clear(); _previewProvider = null; _model = null;
     }
 }
