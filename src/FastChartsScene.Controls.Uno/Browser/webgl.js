@@ -22,7 +22,7 @@ const fragmentSource=`#version 300 es
 precision highp float;
 in vec4 vColor;
 out vec4 fragmentColor;
-void main(){fragmentColor=vColor;}`;
+void main(){if(vColor.a<=0.0)discard;fragmentColor=vColor;}`;
 function shader(gl,type,text){
  const result=gl.createShader(type); if(!result) throw new Error('Could not allocate shader');
  gl.shaderSource(result,text); gl.compileShader(result);

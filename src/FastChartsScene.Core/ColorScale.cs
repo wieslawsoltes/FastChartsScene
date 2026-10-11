@@ -80,6 +80,12 @@ public sealed class ColorScale
         MissingColor = missingColor ?? new(0, 0, 0, 0); ColorMap.ValidateColor(MissingColor);
         Palette = palette ?? ColorMap.Heat; Range = range; Mode = mode; Reversed = reversed; OutOfRange = outOfRange;
     }
+    public ColorScale WithPalette(ColorMap palette) => new(palette, Range, Mode, Reversed, MissingColor, OutOfRange);
+    public ColorScale WithRange(AxisRange? range) => new(Palette, range, Mode, Reversed, MissingColor, OutOfRange);
+    public ColorScale WithMode(ColorScaleMode mode) => new(Palette, Range, mode, Reversed, MissingColor, OutOfRange);
+    public ColorScale WithReversed(bool reversed) => new(Palette, Range, Mode, reversed, MissingColor, OutOfRange);
+    public ColorScale WithMissingColor(ColorRgba color) => new(Palette, Range, Mode, Reversed, color, OutOfRange);
+    public ColorScale WithOutOfRange(ColorOutOfRange behavior) => new(Palette, Range, Mode, Reversed, MissingColor, behavior);
     /// <summary>Use NaN/NaN for an empty source. A constant source keeps its exact value and maps to the palette midpoint.</summary>
     public ResolvedColorScale Resolve(double minimum, double maximum)
     {

@@ -7,7 +7,7 @@ using Windows.Foundation;
 using global::Uno.WinUI.Graphics2DSK;
 
 namespace FastChartsScene.Controls.Uno;
-internal sealed class ChartOverlay : SKCanvasElement,IDisposable
+internal sealed partial class ChartOverlay : SKCanvasElement,IDisposable
 {
     private readonly SkiaFrameRenderer _renderer=new();
     private readonly SKPaint _paint=new() { IsAntialias=true };
@@ -40,6 +40,7 @@ internal sealed class ChartOverlay : SKCanvasElement,IDisposable
                     _renderer.DrawLabel(canvas,new(FormattableString.Invariant($"X {hit.Data.X:G7}   Y {hit.Data.Y:G7}"),x+8,y+30,"#C8DCEFFF",11));
                 }
             }
+            DrawScalarCursor(canvas,frame);
             if(Selection is { } selection)
             {
                 _paint.Style=SKPaintStyle.Fill; _paint.Color=new SKColor(80,160,235,40); canvas.DrawRect(SkiaFrameRenderer.Rect(selection),_paint);

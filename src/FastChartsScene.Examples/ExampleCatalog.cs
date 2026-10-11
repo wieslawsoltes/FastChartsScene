@@ -11,7 +11,7 @@ public sealed record ChartExample(string Id,string Category,string Title,string 
 }
 
 /// <summary>Deterministic, independently reusable scientific chart fixtures. All data is synthetic.</summary>
-public static class ExampleCatalog
+public static partial class ExampleCatalog
 {
     public static IReadOnlyList<ChartExample> All { get; }=Array.AsReadOnly<ChartExample>([
         new("signals","XY charts","Multichannel signals","Three independently styled, sampled waveforms. Drag to pan; wheel to zoom; hover for original sample values.",()=>Signals()),
@@ -27,6 +27,8 @@ public static class ExampleCatalog
         new("financial","Financial","Candlestick chart","Synthetic OHLC prices with a simple moving average. Data is illustrative and not market information.",()=>Financial(FinancialStyle.Candlestick)),
         new("ohlc","Financial","OHLC bars","Open and close ticks, high-low stems, and a moving-average overlay.",()=>Financial(FinancialStyle.Ohlc)),
         new("heatmap","Intensity & contours","Intensity heatmap","Regular scalar grid with a continuous color palette and an intentional missing-data hole.",Heatmap),
+        new("color-scales","Intensity & contours","Logarithmic intensity","A positive scalar field over six decades with a reusable logarithmic color scale and colorbar.",LogIntensity),
+        new("intensity-panes","Intensity & contours","Compared intensity panes","Two independent panes share one immutable manual color scale; each colorbar stays aligned to its own pane.",IntensityPanes),
         new("contours","Intensity & contours","Contour map","Marching-squares contours on a regular scalar field, including ambiguous saddle resolution.",Contours),
         new("spectrum","Signal processing","FFT spectrum","A calibrated Hann-windowed amplitude spectrum of synthetic 37 Hz and 113 Hz sinusoidal components.",Spectrum),
         new("spectrogram","Signal processing","Spectrogram","Short-time Fourier transform of a synthetic chirp; horizontal time, vertical frequency, and intensity in decibels.",Spectrogram),
@@ -118,12 +120,12 @@ public static class ExampleCatalog
     }
     private static ChartDocument Heatmap()
     {
-        var d=Document("Intensity heatmap","X position","Y position"); d.ShowLegend=false; d.XAxis.Range=new(-3,3); d.YAxis.Range=new(-3,3); d.Series.Add(new HeatmapSeries { Title="Scalar field",Grid=Field(hole:true) }); return d;
+        var d=Document("Intensity heatmap","X position","Y position"); d.ShowLegend=false; d.XAxis.Range=new(-3,3); d.YAxis.Range=new(-3,3); d.Series.Add(new HeatmapSeries { Title="Scalar field",Grid=Field(hole:true),ShowColorBar=true,ValueTitle="Field value" }); return d;
     }
     private static ChartDocument Contours()
     {
         var d=Document("Contour lines","X position","Y position"); d.ShowLegend=false; d.XAxis.Range=new(-3,3); d.YAxis.Range=new(-3,3);
-        var s=new ContourSeries { Title="Isolines",Grid=Field(),StrokeWidth=1.8 }; s.SetLevels(Enumerable.Range(-5,11).Select(i=>i*.2).ToArray()); d.Series.Add(s); return d;
+        var s=new ContourSeries { Title="Isolines",Grid=Field(),StrokeWidth=1.8,ShowColorBar=true,ValueTitle="Level" }; s.SetLevels(Enumerable.Range(-5,11).Select(i=>i*.2).ToArray()); d.Series.Add(s); return d;
     }
     private static ChartDocument Spectrum()
     {
@@ -137,7 +139,7 @@ public static class ExampleCatalog
         var stft=Fourier.Spectrogram(samples,rate,256,64); var values=new double[stft.TimeBins*stft.FrequencyBins];
         for(var t=0;t<stft.TimeBins;t++) for(var bin=0;bin<stft.FrequencyBins;bin++) values[bin*stft.TimeBins+t]=20*Math.Log10(Math.Max(1e-5,stft.Values[t*stft.FrequencyBins+bin]));
         var d=Document("Chirp spectrogram","Time","Frequency"); d.XAxis.Units="s"; d.YAxis.Units="Hz"; d.XAxis.Range=new(0,(stft.TimeBins-1)*stft.TimeStep); d.YAxis.Range=new(0,512); d.ShowLegend=false;
-        d.Series.Add(new HeatmapSeries { Title="Amplitude (dB)",Grid=new(stft.TimeBins,stft.FrequencyBins,0,d.XAxis.Range.Maximum,0,512,values) }); return d;
+        d.Series.Add(new HeatmapSeries { Title="Amplitude (dB)",ShowColorBar=true,ValueTitle="Amplitude",ValueUnits="dB",Grid=new(stft.TimeBins,stft.FrequencyBins,0,d.XAxis.Range.Maximum,0,512,values) }); return d;
     }
     private static ChartDocument Polar()
     {
@@ -175,7 +177,7 @@ public static class ExampleCatalog
         var d=Document(kind=="surface"?"Shaded surface":kind=="waterfall"?"Waterfall traces":"3D scalar bars","X","Height"); d.View=ChartView.ThreeD; d.Subtitle="Drag to orbit · wheel to dolly";
         d.XAxis.Range=new(-3,3); d.YAxis.Range=new(-1.4,1.4); d.ZAxis.Range=new(-3,3); d.ZAxis.Title="Z"; d.ShowLegend=false;
         var grid=kind=="bars3d"?Field(12,12):kind=="waterfall"?Field(65,24):Field(65,65);
-        d.Series.Add(kind=="surface"?new SurfaceSeries3D { Grid=grid }:kind=="waterfall"?new WaterfallSeries3D { Grid=grid }:new BarSeries3D { Grid=grid }); return d;
+        d.Series.Add(kind=="surface"?new SurfaceSeries3D { Grid=grid,ShowColorBar=true,ValueTitle="Height" }:kind=="waterfall"?new WaterfallSeries3D { Grid=grid,ShowColorBar=true,ValueTitle="Height" }:new BarSeries3D { Grid=grid,ShowColorBar=true,ValueTitle="Height" }); return d;
     }
     private static ChartDocument Helix()
     {
