@@ -39,7 +39,8 @@ export async function validateProperties(page,{inspect,scenario,output}) {
     assert(v.width>1&&v.height>1&&v.x>=0&&v.y>=0&&v.x+v.width<=w.width+1&&v.y+v.height<=w.height+1,'Inspector viewport must be visible');
     const delta=Math.max(-600,Math.min(600,b.y+b.height/2-v.y-v.height/2));
     assert(Math.abs(delta)>1,'Property is horizontally clipped, not vertically scrollable');
-    await page.mouse.move(v.x+v.width/2,v.y+v.height/2);
+    // Use the name gutter so NumberBox wheel editing cannot alter a chart value.
+    await page.mouse.move(v.x+Math.min(35,v.width/4),v.y+v.height/2);
     await page.mouse.wheel(0,delta);nextWheel=Date.now()+200;
    }
   }
