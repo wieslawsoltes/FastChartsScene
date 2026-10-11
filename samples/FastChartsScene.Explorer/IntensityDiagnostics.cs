@@ -65,6 +65,21 @@ public static partial class BrowserBridge
 #if __WASM__
     [JSExport]
 #endif
+    public static bool IntensityDropDownIsOpen(string name) => IntensityControl(name) is ComboBox { IsDropDownOpen: true };
+#if __WASM__
+    [JSExport]
+#endif
+    public static string IntensityOptionBounds(string name, int index)
+    {
+        if (IntensityControl(name) is not ComboBox combo || !combo.IsDropDownOpen ||
+            index < 0 || index >= combo.Items.Count || combo.ContainerFromIndex(index) is not FrameworkElement item ||
+            item.ActualWidth < 1 || item.ActualHeight < 1) return "";
+        var point = item.TransformToVisual(null).TransformPoint(new Point(0, 0));
+        return JsonSerializer.Serialize(new RectD(point.X, point.Y, item.ActualWidth, item.ActualHeight), BrowserJsonContext.Default.RectD);
+    }
+#if __WASM__
+    [JSExport]
+#endif
     public static string IntensityControlBounds(string name)
     {
         var element = IntensityControl(name); var point = element.TransformToVisual(null).TransformPoint(new Point(0, 0));

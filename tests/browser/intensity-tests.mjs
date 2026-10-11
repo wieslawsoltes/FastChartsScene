@@ -43,8 +43,16 @@ export async function validateIntensity(page,{inspect,select,scenario,output}) {
  }
  async function click(name){const b=await bounds(name);await page.mouse.click(b.x+b.width/2,b.y+b.height/2);}
  async function selectOption(name,index){
-  const b=await bounds(name);await page.mouse.click(b.x+b.width/2,b.y+b.height-16);await page.keyboard.press('Home');
-  for(let i=0;i<index;i++)await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
+  const b=await bounds(name);await page.mouse.click(b.x+b.width/2,b.y+b.height-16);
+  // Popup opening/layout is asynchronous. Wait for the actual item container, then use
+  // browser pointer input; do not assign SelectedItem or invoke a model setter.
+  await page.waitForFunction(([n,i])=>{
+   const raw=globalThis.chartBridge.IntensityOptionBounds(n,i);if(!raw)return false;
+   const box=JSON.parse(raw);return box.width>1&&box.height>1&&box.y>=0&&box.y+box.height<=innerHeight;
+  },[name,index]);
+  const item=await page.evaluate(([n,i])=>JSON.parse(globalThis.chartBridge.IntensityOptionBounds(n,i)),[name,index]);
+  await page.mouse.click(item.x+item.width/2,item.y+item.height/2);
+  await page.waitForFunction(n=>!globalThis.chartBridge.IntensityDropDownIsOpen(n),name);
  }
  async function input(name,value){const b=await bounds(name);await page.mouse.click(b.x+b.width/2,b.y+b.height-18);await page.keyboard.press('Control+a');await page.keyboard.insertText(value);await page.keyboard.press('Tab');}
  await scenario('intensity colorbar lives outside data plot and exposes range',async()=>{
