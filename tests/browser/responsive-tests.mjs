@@ -1,3 +1,5 @@
+import {validateRenderingReview} from './rendering-review-tests.mjs';
+
 // Actual narrow-screen toolbar interactions. The test only scrolls a clipped toolbar action
 // into view through the framework; selection and dialog opening still use browser input.
 export async function validateCompactActions(page,inspect,scenario,image){
@@ -28,4 +30,5 @@ export async function validateCompactActions(page,inspect,scenario,image){
   await page.keyboard.press('Escape');await page.waitForFunction(()=>!globalThis.chartBridge.InspectorIsOpen());
   const state=await inspect();if(state.error)throw new Error(state.error);
  });
+ await validateRenderingReview(page,inspect,scenario);
 }
