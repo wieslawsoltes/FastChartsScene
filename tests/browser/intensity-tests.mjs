@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {PNG} from 'pngjs';
 import {resolve} from 'node:path';
+import {intensityInput} from './intensity-input.mjs';
 
 export async function validateIntensity(page,{inspect,select,scenario,output}) {
  const state=()=>page.evaluate(()=>JSON.parse(globalThis.chartBridge.InspectIntensity()));
@@ -36,25 +37,7 @@ export async function validateIntensity(page,{inspect,select,scenario,output}) {
   const i=(Math.floor(point.y)*png.width+Math.floor(point.x))*4;return [...png.data.subarray(i,i+4)];
  }
  function color(actual,expected){for(let i=0;i<3;i++)assert(Math.abs(actual[i]-expected[i])<=2,`Expected ${expected}; got ${actual}`);}
- async function bounds(name){
-  await page.evaluate(n=>globalThis.chartBridge.BringIntensityControlIntoView(n),name);
-  await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
-  return page.evaluate(n=>JSON.parse(globalThis.chartBridge.IntensityControlBounds(n)),name);
- }
- async function click(name){const b=await bounds(name);await page.mouse.click(b.x+b.width/2,b.y+b.height/2);}
- async function selectOption(name,index){
-  const b=await bounds(name);await page.mouse.click(b.x+b.width/2,b.y+b.height-16);
-  // Popup opening/layout is asynchronous. Wait for the actual item container, then use
-  // browser pointer input; do not assign SelectedItem or invoke a model setter.
-  await page.waitForFunction(([n,i])=>{
-   const raw=globalThis.chartBridge.IntensityOptionBounds(n,i);if(!raw)return false;
-   const box=JSON.parse(raw);return box.width>1&&box.height>1&&box.y>=0&&box.y+box.height<=innerHeight;
-  },[name,index]);
-  const item=await page.evaluate(([n,i])=>JSON.parse(globalThis.chartBridge.IntensityOptionBounds(n,i)),[name,index]);
-  await page.mouse.click(item.x+item.width/2,item.y+item.height/2);
-  await page.waitForFunction(n=>!globalThis.chartBridge.IntensityDropDownIsOpen(n),name);
- }
- async function input(name,value){const b=await bounds(name);await page.mouse.click(b.x+b.width/2,b.y+b.height-18);await page.keyboard.press('Control+a');await page.keyboard.insertText(value);await page.keyboard.press('Tab');}
+ const {click,selectOption,input}=intensityInput(page,state);
  await scenario('intensity colorbar lives outside data plot and exposes range',async()=>{
   await select('heatmap');const s=await inspect(),i=await state(),bar=i.series[0].colorBar;
   assert(bar&&bar.x>s.plot.x+s.plot.width&&bar.x+bar.width<s.bounds.width);assert(i.series[0].hasValues);

@@ -83,9 +83,20 @@ jobs:
           npm install --ignore-scripts --no-audit --no-fund --no-package-lock
           npx playwright install --with-deps chromium
       - name: Validate actual GPU application
+        id: gpu_browser
         if: always() && steps.browser_dependencies.outcome == 'success'
         working-directory: tests/browser
         run: node browser-tests.mjs 2>&1 | tee ../../artifacts/browser-tests.txt
+      - name: Publish GPU failure evidence immediately
+        if: always() && steps.gpu_browser.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-browser-failure
+          path: |
+            artifacts/browser-results
+            artifacts/browser-tests.txt
+            artifacts/source-revision.txt
+          if-no-files-found: error
       - name: Validate current-build 2D and 3D fallback
         if: always() && steps.browser_dependencies.outcome == 'success'
         working-directory: tests/browser
