@@ -46,13 +46,28 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
     private IReadOnlyList<CatalogEntry>? _lastEntries;
     private bool _sync, _disposed, _processing, _modelSubscribed;
     private int _generation;
+    private string? _pendingScroll;
     public CatalogBrowserModel? Model => _model;
     public CatalogEntry? SelectedEntry { get; private set; }
     public bool IsTileView { get; private set; } = true;
     public string SearchText => Search.Text;
     public IReadOnlyList<string> VisibleIds => _lastEntries?.Select(e => e.Id).ToArray() ?? [];
     public FrameworkElement? EntryContainer(string id) => (IsTileView ? (ListViewBase)Tiles : List).ContainerFromItem(_cards[id]) as FrameworkElement;
-    public void BringEntryIntoView(string id) => (IsTileView ? (ListViewBase)Tiles : List).ScrollIntoView(_cards[id]);
+    public void BringEntryIntoView(string id)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!_cards.ContainsKey(id) || _lastEntries?.Any(e => e.Id == id) != true) throw new ArgumentException("Entry is not in the current view: " + id, nameof(id));
+        _pendingScroll = id;
+        DispatcherQueue.TryEnqueue(ApplyPendingScroll);
+    }
+    private void ApplyPendingScroll()
+    {
+        if (_disposed || !IsLoaded || Visibility != Visibility.Visible || _pendingScroll is not { } id) return;
+        var view = IsTileView ? (ListViewBase)Tiles : List;
+        if (view.ActualWidth <= 1 || view.ActualHeight <= 1 || view.ItemsPanelRoot == null) return;
+        _pendingScroll = null; // ScrollIntoView may trigger layout; never re-enter the same request.
+        if (_lastEntries?.Any(e => e.Id == id) == true) view.ScrollIntoView(_cards[id]);
+    }
     public int CachedPreviews => _previewLru.Count;
     public int PendingPreviews => _requests.Count;
     public int GeneratedPreviews { get; private set; }
@@ -65,6 +80,7 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
     public CatalogBrowserControl()
     {
         InitializeComponent();
+        LayoutUpdated += (_, _) => ApplyPendingScroll();
         _debounce.Tick += (_, _) => { _debounce.Stop(); ApplyFilter(); };
         SizeChanged += (_, _) => { var compact = ActualWidth < 850; PreviewColumn.Width = new GridLength(compact ? 0 : 300); PreviewPane.Visibility = compact ? Visibility.Collapsed : Visibility.Visible; };
         Unloaded += (_, _) => { DetachModel(); SuspendPreviews(); };
@@ -176,7 +192,10 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
     public void ChangeView(bool tiles)
     {
         SuspendPreviews(); IsTileView = tiles; Tiles.Visibility = tiles ? Visibility.Visible : Visibility.Collapsed; List.Visibility = tiles ? Visibility.Collapsed : Visibility.Visible;
-        if (SelectedEntry != null) (tiles ? (ListViewBase)Tiles : List).ScrollIntoView(_cards[SelectedEntry.Id]);
+        // A previously collapsed virtualizing panel may not have a layout yet. Keep the
+        // request until its real panel is arranged instead of dropping early navigation.
+        if (SelectedEntry != null) _pendingScroll = SelectedEntry.Id;
+        DispatcherQueue.TryEnqueue(ApplyPendingScroll);
         RefreshPreviews(); SelectionUpdated?.Invoke(this, EventArgs.Empty);
     }
     private void ContainerChanging(ListViewBase sender, ContainerContentChangingEventArgs args)

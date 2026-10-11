@@ -46,6 +46,15 @@ export async function validateGallery(page,{inspect,scenario,output}){
   }
   throw new Error('Gallery root was not painted opaque charcoal over the chart');
  }
+ async function view(tiles){
+  await click(tiles?'Tile view':'List view');
+  await page.waitForFunction(expected=>JSON.parse(globalThis.chartBridge.InspectGallery()).tiles===expected,tiles);
+ }
+ async function favorite(){
+  const before=await state(),id=before.selected,expected=!before.favorites.includes(id);
+  await click('Favorite selected example');
+  await page.waitForFunction(([id,expected])=>JSON.parse(globalThis.chartBridge.InspectGallery()).favorites.includes(id)===expected,[id,expected]);
+ }
  async function query(text){
   const before=await state();
   await click('Search examples');await page.waitForFunction(()=>['INPUT','TEXTAREA'].includes(document.activeElement?.tagName));
@@ -88,14 +97,14 @@ export async function validateGallery(page,{inspect,scenario,output}){
   await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectGallery()).visible.length===31);
  });
  await scenario('gallery: list view preserves selection and opens using the keyboard',async()=>{
-  await click('List view');await entry('surface');assert.equal((await state()).tiles,false);
+  await view(false);await entry('surface');assert.equal((await state()).tiles,false);
   await page.screenshot({path:resolve(output,'gallery-list.png'),scale:'css'});
   await page.keyboard.press('Enter');await page.waitForFunction(()=>!JSON.parse(globalThis.chartBridge.InspectGallery()).open&&JSON.parse(globalThis.chartBridge.Inspect()).example==='surface');
   await home();assert.equal((await state()).tiles,false);assert.equal((await state()).selected,'surface');
  });
  await scenario('gallery: favorites toggle filter and actual download preserve exact IDs',async()=>{
-  await click('Favorite selected example');assert((await state()).favorites.includes('surface'));
-  await entry('signals');await click('Favorite selected example');await click('Favorites only');
+  await favorite();assert((await state()).favorites.includes('surface'));
+  await entry('signals');await favorite();await click('Favorites only');
   await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectGallery()).visible.length===2);
   assert.deepEqual((await state()).visible,['signals','surface']);
   const pending=page.waitForEvent('download');await click('Export favorites');const file=await pending;const path=resolve(output,'gallery-favorites.json');await file.saveAs(path);
@@ -107,7 +116,7 @@ export async function validateGallery(page,{inspect,scenario,output}){
   assert.equal(await page.evaluate(()=>globalThis.chartBridge.ExportFavorites()),before);
   await page.evaluate(()=>globalThis.chartBridge.ImportFavorites('{"format":"FastChartsScene.Favorites","version":1,"ids":["surface"]}'));
   await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectGallery()).visible.length===1);assert.equal((await state()).selected,'surface');
-  await click('Clear search');await click('Tile view');
+  await click('Clear search');await view(true);
  });
  await scenario('gallery: back navigation stops acquisition and reuses preview cache',async()=>{
   await entry('signals');await click('Open example');await page.waitForFunction(()=>!JSON.parse(globalThis.chartBridge.InspectGallery()).open);
@@ -129,7 +138,7 @@ export async function validateGallery(page,{inspect,scenario,output}){
   await home();return {entries:names.length,bytes:(await readFile(path)).length};
  });
  await scenario('gallery: favorites and list preference survive browser reload',async()=>{
-  await click('List view');await entry('signals');await click('Open example');await page.waitForFunction(()=>!JSON.parse(globalThis.chartBridge.InspectGallery()).open);
+  await view(false);await entry('signals');await click('Open example');await page.waitForFunction(()=>!JSON.parse(globalThis.chartBridge.InspectGallery()).open);
   await page.reload({waitUntil:'domcontentloaded',timeout:180000});
   await page.waitForFunction(()=>globalThis.Module?.getAssemblyExports,undefined,{timeout:180000});
   await page.evaluate(async()=>{const e=await globalThis.Module.getAssemblyExports('FastChartsScene.Explorer');globalThis.chartBridge=e.FastChartsScene.Explorer.BrowserBridge;document.addEventListener('wheel',e=>globalThis.lastChartWheel={x:e.clientX,y:e.clientY},{capture:true,passive:true});});
@@ -137,6 +146,6 @@ export async function validateGallery(page,{inspect,scenario,output}){
   await page.locator('.uno-loader').waitFor({state:'detached',timeout:180000});
   const s=await state();assert.deepEqual(s.favorites,['surface']);assert.equal(s.tiles,false);
   if(process.env.RENDER_MODE==='Skia')await page.evaluate(()=>globalThis.chartBridge.Command('backend','Skia'));
-  await click('Tile view');await entry('signals');await click('Open example');await page.waitForFunction(()=>!JSON.parse(globalThis.chartBridge.InspectGallery()).open);
+  await view(true);await entry('signals');await click('Open example');await page.waitForFunction(()=>!JSON.parse(globalThis.chartBridge.InspectGallery()).open);
  });
 }
