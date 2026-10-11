@@ -1,0 +1,82 @@
+<UserControl
+    x:Class="FastChartsScene.Controls.Uno.CatalogBrowserControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FastChartsScene.Controls.Uno"
+    Background="#303030">
+    <UserControl.Resources>
+        <DataTemplate x:Key="TileTemplate" x:DataType="local:CatalogCard">
+            <Grid Width="232" Padding="5" RowSpacing="4">
+                <Grid.RowDefinitions><RowDefinition Height="140"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Border Background="#161616" BorderBrush="#535353" BorderThickness="1">
+                    <Grid>
+                        <TextBlock Text="{x:Bind PreviewMessage, Mode=OneWay}" Foreground="#BDBDBD" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="200"/>
+                        <Image Source="{x:Bind Preview, Mode=OneWay}" Stretch="Uniform"/>
+                    </Grid>
+                </Border>
+                <Button Content="{x:Bind FavoriteGlyph, Mode=OneWay}" Tag="{x:Bind Id}" Click="FavoriteClicked" AutomationProperties.Name="Toggle example favorite" ToolTipService.ToolTip="Add or remove favorite" HorizontalAlignment="Right" VerticalAlignment="Top" Padding="6,1" MinWidth="28" MinHeight="24" Foreground="#F2CC00" Background="#CC303030"/>
+                <TextBlock Grid.Row="1" Text="{x:Bind Title}" Foreground="White" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Grid.Row="2" Text="{x:Bind TagsText}" Foreground="#D6BC2C" FontSize="10" TextTrimming="CharacterEllipsis"/>
+            </Grid>
+        </DataTemplate>
+        <DataTemplate x:Key="ListTemplate" x:DataType="local:CatalogCard">
+            <Grid Padding="8,5" ColumnSpacing="12">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="*"/><ColumnDefinition Width="36"/></Grid.ColumnDefinitions>
+                <Border Background="#161616" Width="100" Height="64"><Image Source="{x:Bind Preview, Mode=OneWay}" Stretch="Uniform"/></Border>
+                <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                    <TextBlock Text="{x:Bind Title}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{x:Bind TagsText}" FontSize="10" Foreground="#D6BC2C" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{x:Bind Description}" FontSize="11" Foreground="#BDBDBD" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+                <Button Grid.Column="2" Content="{x:Bind FavoriteGlyph, Mode=OneWay}" Tag="{x:Bind Id}" Click="FavoriteClicked" AutomationProperties.Name="Toggle example favorite" ToolTipService.ToolTip="Add or remove favorite" Foreground="#F2CC00" Padding="6,2" VerticalAlignment="Center"/>
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+    <Grid Padding="16,12,16,8" RowSpacing="10">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBox x:Name="Search" PlaceholderText="Search examples by keywords or &quot;exact phrase&quot;" AutomationProperties.Name="Search examples" MaxLength="512" TextChanged="SearchChanged"/>
+            <Button Grid.Column="1" Content="Clear" AutomationProperties.Name="Clear search" Click="ClearClicked" Padding="10,4"/>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+                <Button Content="Tiles" AutomationProperties.Name="Tile view" Click="TilesClicked"/>
+                <Button Content="List" AutomationProperties.Name="List view" Click="ListClicked"/>
+            </StackPanel>
+        </Grid>
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <ComboBox x:Name="Category" AutomationProperties.Name="Example category" MinWidth="150" SelectionChanged="FilterChanged"/>
+                <CheckBox x:Name="FavoritesOnly" Content="Favorites only" Checked="FavoriteFilterChanged" Unchecked="FavoriteFilterChanged" FontSize="12"/>
+                <ComboBox x:Name="TagMode" AutomationProperties.Name="Tag matching" SelectedIndex="0" SelectionChanged="FilterChanged" MinWidth="105"><x:String>Match all</x:String><x:String>Match any</x:String></ComboBox>
+                <StackPanel x:Name="TagButtons" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"/>
+            </StackPanel>
+        </ScrollViewer>
+        <Grid Grid.Row="2" x:Name="Body" ColumnSpacing="16">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition x:Name="PreviewColumn" Width="300"/></Grid.ColumnDefinitions>
+            <Grid>
+                <GridView x:Name="Tiles" ItemTemplate="{StaticResource TileTemplate}" SelectionMode="Single" SelectionChanged="SelectionChanged" ContainerContentChanging="ContainerChanging" DoubleTapped="OpenDoubleTapped" KeyDown="EntryKeyDown" ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
+                <ListView x:Name="List" ItemTemplate="{StaticResource ListTemplate}" SelectionMode="Single" SelectionChanged="SelectionChanged" ContainerContentChanging="ContainerChanging" DoubleTapped="OpenDoubleTapped" KeyDown="EntryKeyDown" Visibility="Collapsed" HorizontalContentAlignment="Stretch"/>
+                <TextBlock x:Name="Empty" Text="No matching examples. Clear search or change the filters." TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="320" Opacity="0.7" Visibility="Collapsed"/>
+            </Grid>
+            <ScrollViewer x:Name="PreviewPane" Grid.Column="1" HorizontalScrollBarVisibility="Disabled" HorizontalScrollMode="Disabled">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="SELECTED EXAMPLE" Foreground="#AFAFAF" FontSize="10" CharacterSpacing="90"/>
+                    <TextBlock x:Name="SelectedTitle" Foreground="#F2CC00" FontSize="21" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    <Border Background="#151515" Height="190" BorderThickness="1" BorderBrush="#555555"><Image x:Name="SelectedImage" Stretch="Uniform"/></Border>
+                    <TextBlock x:Name="SelectedCategory" FontSize="11" Foreground="#D6BC2C"/>
+                    <TextBlock x:Name="SelectedDescription" TextWrapping="Wrap" FontSize="13" MaxWidth="296"/>
+                    <StackPanel x:Name="SelectedTags" Spacing="4"/>
+                    <TextBlock Text="Double-click an example or select Open example. Use the star to keep favorites. All previews render the actual example data." FontSize="11" Foreground="#AAAAAA" TextWrapping="Wrap" MaxWidth="296"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+        <Grid Grid.Row="3" ColumnSpacing="8">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock x:Name="ResultCount" VerticalAlignment="Center" FontSize="11" TextTrimming="CharacterEllipsis"/>
+            <Button Grid.Column="1" Content="Export favorites" AutomationProperties.Name="Export favorites" Click="ExportFavoritesClicked" FontSize="11" Padding="8,4"/>
+            <Button Grid.Column="2" Content="Import favorites" AutomationProperties.Name="Import favorites" Click="ImportFavoritesClicked" FontSize="11" Padding="8,4"/>
+            <Button Grid.Column="3" x:Name="FavoriteSelected" Content="☆" AutomationProperties.Name="Favorite selected example" Click="FavoriteSelectedClicked" Foreground="#F2CC00" FontSize="18" Padding="12,2"/>
+            <Button Grid.Column="4" x:Name="Open" Content="Open example" AutomationProperties.Name="Open example" Click="OpenClicked" Background="#E5BF00" Foreground="#181818" FontWeight="SemiBold" Padding="18,7"/>
+        </Grid>
+    </Grid>
+</UserControl>
