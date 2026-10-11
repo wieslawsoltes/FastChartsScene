@@ -20,12 +20,13 @@ public sealed partial class ChartInteraction
         ArgumentNullException.ThrowIfNull(frame); ObjectDisposedException.ThrowIf(_document.IsDisposed, _document);
         if (!location.IsFinite || !double.IsFinite(tolerance) || tolerance < 0) throw new ArgumentOutOfRangeException(nameof(tolerance));
         LastSampleQueryVisits = LastSampleQueryTests = 0;
-        if (_document.View != ChartView.XY || !frame.Layout.Plot.Contains(location) ||
+        if (_document.View != ChartView.XY || frame.Metadata.Revision != _document.Revision || !frame.Layout.Plot.Contains(location) ||
             frame.Metadata.Hits.Any(h => h.Kind == "legend" && h.Bounds.Contains(location))) return null;
         DataHit? best = null;
         for (var s = _document.Series.Count - 1; s >= 0; s--)
         {
             if (_document.Series[s] is not DataSeries { Visible: true } series || series.Color.A <= 0) continue;
+            if (series is LineSeries { FillToBaseline: false, Marker: MarkerShape.None } line && (!line.ShowLine || line.StrokeWidth <= 0)) continue;
             var pane = frame.Layout.ForAxis(series.YAxisId); if (!pane.Contains(location)) continue;
             var x = _document.FindX(series.XAxisId); var y = _document.FindY(series.YAxisId);
             var radius = best?.Distance ?? tolerance; var transpose = series is BarSeries { Horizontal: true };

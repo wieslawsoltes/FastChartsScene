@@ -19,8 +19,8 @@ public abstract class Series : ObservableModel
     public string Title { get=>_title; set=>Set(ref _title,value??""); }
     public bool Visible { get=>_visible; set=>Set(ref _visible,value); }
     public ColorRgba Color { get=>_color; set=>Set(ref _color,value); }
-    public string XAxisId { get=>_xAxisId; set=>Set(ref _xAxisId,value); }
-    public string YAxisId { get=>_yAxisId; set=>Set(ref _yAxisId,value); }
+    public string XAxisId { get=>_xAxisId; set { ArgumentException.ThrowIfNullOrWhiteSpace(value); Set(ref _xAxisId,value); } }
+    public string YAxisId { get=>_yAxisId; set { ArgumentException.ThrowIfNullOrWhiteSpace(value); Set(ref _yAxisId,value); } }
     public double StrokeWidth { get=>_strokeWidth; set { if(!double.IsFinite(value)||value<0||value>64) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _strokeWidth,value); } }
     public abstract int PointCount { get; }
 }
@@ -38,8 +38,8 @@ public sealed class LineSeries : DataSeries
     private MarkerShape _marker;
     private bool _showLine=true,_fill;
     private double _baseline,_markerSize=5;
-    public LineInterpolation Interpolation { get=>_interpolation; set=>Set(ref _interpolation,value); }
-    public MarkerShape Marker { get=>_marker; set=>Set(ref _marker,value); }
+    public LineInterpolation Interpolation { get=>_interpolation; set { if(!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _interpolation,value); } }
+    public MarkerShape Marker { get=>_marker; set { if(!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _marker,value); } }
     public bool ShowLine { get=>_showLine; set=>Set(ref _showLine,value); }
     public bool FillToBaseline { get=>_fill; set=>Set(ref _fill,value); }
     public double Baseline { get=>_baseline; set { if(!double.IsFinite(value)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _baseline,value); } }
@@ -68,13 +68,14 @@ public sealed class FinancialSeries : Series
 {
     private OhlcPoint[] _points=[];
     private FinancialStyle _style;
-    public IReadOnlyList<OhlcPoint> Points=>Array.AsReadOnly(_points);
+    private IReadOnlyList<OhlcPoint> _readOnlyPoints=Array.AsReadOnly(Array.Empty<OhlcPoint>());
+    public IReadOnlyList<OhlcPoint> Points=>_readOnlyPoints;
     public override int PointCount=>_points.Length;
-    public FinancialStyle Style { get=>_style; set=>Set(ref _style,value); }
+    public FinancialStyle Style { get=>_style; set { if(!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _style,value); } }
     public void SetData(ReadOnlySpan<OhlcPoint> points)
     {
         foreach(var p in points) if(!double.IsFinite(p.X)||!double.IsFinite(p.Open)||!double.IsFinite(p.High)||!double.IsFinite(p.Low)||!double.IsFinite(p.Close)||!double.IsFinite(p.Volume)||p.High<Math.Max(p.Open,p.Close)||p.Low>Math.Min(p.Open,p.Close)||p.Volume<0) throw new ArgumentException("Invalid OHLC candle.");
-        _points=points.ToArray(); Notify(nameof(Points));
+        _points=points.ToArray(); _readOnlyPoints=Array.AsReadOnly(_points); Notify(nameof(Points));
     }
 }
 
