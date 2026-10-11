@@ -6,8 +6,10 @@ using FastChartsScene.Rendering;
 namespace FastChartsScene.Tests;
 internal static partial class Program
 {
+    static partial void RegisterContourReviewTests();
     static partial void RegisterPerformanceReviewTests()
     {
+        RegisterContourReviewTests();
         Add("viewport heatmap projection equals exhaustive cells under inversion and log clipping", () => {
             var random = new Random(640);
             foreach (var dimensions in new[] { (1,1), (1,17), (19,1), (19,17) })

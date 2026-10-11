@@ -39,7 +39,7 @@ public sealed partial class SceneCompiler
         frame.Validate(); _frame = frame; _document = document; CompilationCount++;
         return frame;
     }
-    public void ClearCache() { _document = null; _frame = null; _indexes.Clear(); }
+    public void ClearCache() { _document = null; _frame = null; _indexes.Clear(); _contours.Clear(); }
 
     private void BuildXY(ChartDocument d, ChartLayout l, FrameBuilder f)
     {
@@ -111,8 +111,7 @@ public sealed partial class SceneCompiler
                     }
                     break;
                 case ContourSeries contour:
-                    foreach (var segment in GeometryAlgorithms.Contours(contour.Grid,contour.Levels.Span))
-                        f.Line(Map(segment.A),Map(segment.B),contour.ResolveColorScale().Color(segment.Level),contour.StrokeWidth,p);
+                    DrawContours(contour, f, p, Map);
                     break;
                 case HeatmapSeries heat when s.GetType()==typeof(HeatmapSeries):
                     DrawHeatmap(heat, l, x, y, f);

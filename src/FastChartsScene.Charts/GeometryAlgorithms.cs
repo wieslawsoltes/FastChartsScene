@@ -76,27 +76,50 @@ public static class GeometryAlgorithms
     /// <summary>Marching squares with an asymptotic saddle decider. NaN cells are holes.</summary>
     public static IReadOnlyList<ContourSegment> Contours(ScalarGrid grid,ReadOnlySpan<double> levels)
     {
+        ArgumentNullException.ThrowIfNull(grid);
+        foreach (var level in levels) if (!double.IsFinite(level)) throw new ArgumentOutOfRangeException(nameof(levels));
         List<ContourSegment> segments=[];
+        // Reuse four corners/hits for every cell and level; no per-cell heap allocation.
+        Span<double> v = stackalloc double[4];
+        Span<PointD> p = stackalloc PointD[4];
+        Span<PointD> hits = stackalloc PointD[4];
         foreach(var level in levels)
         for(var row=0;row<grid.Rows-1;row++)
         for(var col=0;col<grid.Columns-1;col++)
         {
-            double[] v=[grid[col,row],grid[col+1,row],grid[col+1,row+1],grid[col,row+1]];
-            if(v.Any(double.IsNaN)) continue;
-            PointD[] p=[new(grid.X(col),grid.Y(row)),new(grid.X(col+1),grid.Y(row)),new(grid.X(col+1),grid.Y(row+1)),new(grid.X(col),grid.Y(row+1))];
-            List<(int Edge,PointD Point)> hits=[];
+            v[0]=grid[col,row]; v[1]=grid[col+1,row]; v[2]=grid[col+1,row+1]; v[3]=grid[col,row+1];
+            if(double.IsNaN(v[0])||double.IsNaN(v[1])||double.IsNaN(v[2])||double.IsNaN(v[3])) continue;
+            var mask=(v[0]>=level?1:0)|(v[1]>=level?2:0)|(v[2]>=level?4:0)|(v[3]>=level?8:0);
+            if(mask is 0 or 15) continue;
+            p[0]=new(grid.X(col),grid.Y(row)); p[1]=new(grid.X(col+1),grid.Y(row));
+            p[2]=new(grid.X(col+1),grid.Y(row+1)); p[3]=new(grid.X(col),grid.Y(row+1));
+            var count=0;
             for(var e=0;e<4;e++)
             {
                 var j=(e+1)%4;
                 if((v[e]>=level)==(v[j]>=level)) continue;
-                var t=(level-v[e])/(v[j]-v[e]); hits.Add((e,new(p[e].X+t*(p[j].X-p[e].X),p[e].Y+t*(p[j].Y-p[e].Y))));
+                var numerator=level-v[e]; var denominator=v[j]-v[e];
+                var t=numerator/denominator;
+                if(!double.IsFinite(numerator)||!double.IsFinite(denominator))
+                {
+                    var magnitude=Math.Max(Math.Abs(level),Math.Max(Math.Abs(v[e]),Math.Abs(v[j])));
+                    t=(level/magnitude-v[e]/magnitude)/(v[j]/magnitude-v[e]/magnitude);
+                }
+                t=Math.Clamp(t,0,1);
+                hits[count++]=new(p[e].X+t*(p[j].X-p[e].X),p[e].Y+t*(p[j].Y-p[e].Y));
             }
-            if(hits.Count==2) segments.Add(new(hits[0].Point,hits[1].Point,level));
-            else if(hits.Count==4)
+            if(count==2) segments.Add(new(hits[0],hits[1],level));
+            else if(count==4)
             {
                 var determinant=(v[0]-level)*(v[2]-level)-(v[1]-level)*(v[3]-level);
-                if(determinant>=0) { segments.Add(new(hits[0].Point,hits[1].Point,level)); segments.Add(new(hits[2].Point,hits[3].Point,level)); }
-                else { segments.Add(new(hits[0].Point,hits[3].Point,level)); segments.Add(new(hits[1].Point,hits[2].Point,level)); }
+                if(!double.IsFinite(determinant))
+                {
+                    var magnitude=Math.Max(Math.Abs(level),Math.Max(Math.Max(Math.Abs(v[0]),Math.Abs(v[1])),Math.Max(Math.Abs(v[2]),Math.Abs(v[3]))));
+                    var l=level/magnitude;
+                    determinant=(v[0]/magnitude-l)*(v[2]/magnitude-l)-(v[1]/magnitude-l)*(v[3]/magnitude-l);
+                }
+                if(determinant>=0) { segments.Add(new(hits[0],hits[1],level)); segments.Add(new(hits[2],hits[3],level)); }
+                else { segments.Add(new(hits[0],hits[3],level)); segments.Add(new(hits[1],hits[2],level)); }
             }
         }
         return segments;
