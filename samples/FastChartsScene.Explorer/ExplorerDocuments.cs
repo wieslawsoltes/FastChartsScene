@@ -23,7 +23,7 @@ public sealed partial class ExplorerPage
         var old=Chart.Document;
         Current=new ChartExample("document","Documents",next.Title,"Imported chart document. Axis bindings, styles, data, annotations and camera settings were restored.",()=>ChartJson.Read(json));
         Chart.Document=next; old?.Dispose();
-        _selecting=true; _examples.SelectedItem=null; _selecting=false; _play.IsEnabled=false;
+        _play.IsEnabled=false; UpdateExampleHeader(); ShowGallery(false);
         _description.Text=Current.Description+"\n\nThe file uses FastChartsScene format version 1. Session-only series IDs are regenerated on import.";
         _usage.Text="using FastChartsScene.Serialization;\n\nvar document = ChartJson.Read(json);\nchart.Document = document;\nvar saved = ChartJson.Write(document);";
         var first=next.Series.OfType<DataSeries>().FirstOrDefault();

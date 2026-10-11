@@ -6,6 +6,14 @@ Independent scientific charting components for .NET 10 and Uno Platform, with a 
 
 ## Application
 
+The explorer opens in a reference-style charcoal/yellow **tile or list gallery** with
+real rendered previews, keyword/phrase search, category/tag filters, favorites, and
+portable favorite lists. Selected charts use a compact header, a larger chart-first
+work area, and a searchable light Properties panel. Details opens the data/usage tabs.
+**Extract project** saves the edited chart as a standalone desktop/browser Uno source
+project, built against the matching downloadable NuGet packages. See the
+[gallery, extraction and performance contract](docs/EXPLORER-UI.md).
+
 The explorer contains 31 deterministic chart fixtures: multichannel/live signals, one million samples, scatter, monotone cubic/step/area curves, bands, error bars, positive/negative and horizontal stacks, candlestick/OHLC, heatmaps, logarithmic intensity, compared intensity panes, contours, FFT spectra, spectrograms, polar/Smith plots, stacked/segmented axes, logarithmic/date axes, surfaces, waterfalls, spatial bars/lines/meshes, pies, and doughnuts.
 
 A searchable gallery, property inspector, original-data preview, chart-document open/save, bounded synthetic acquisition, legend visibility, pan/orbit, anchored wheel/pinch zoom, rectangle zoom, and viewport undo/redo are included. Unsupported combinations are diagnosed rather than silently substituted.
@@ -19,6 +27,7 @@ A searchable gallery, property inspector, original-data preview, chart-document 
 | All data CSV | Every current series, including uncertainty bounds, financial data, grids, spatial points, mesh topology, and pie values |
 | SVG | Actual clipped 2D vector geometry and escaped text; depth-tested 3D and interpolated vertex colors are explicitly rejected |
 | Save chart / Open chart | Versioned JSON document with all current data, styles, axes, annotations, and camera settings |
+| Extract project | Standalone Uno source ZIP containing the exact edited chart JSON; matching NuGet packages are supplied separately |
 | Frame JSON | Render metadata for diagnostics; this is not a complete saved chart |
 
 ## Intensity charts

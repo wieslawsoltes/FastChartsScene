@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
+import { validateGallery } from './gallery-tests.mjs';
 import { validateCompactActions } from './responsive-tests.mjs';
 import { validateIntensity } from './intensity-tests.mjs';
 import { observeChartContexts, validateGpuLifecycle } from './gpu-lifecycle-tests.mjs';
@@ -53,6 +54,11 @@ async function open(dpr){
  });
  await page.waitForFunction(()=>{try{return JSON.parse(globalThis.chartBridge.Inspect()).bounds.width>100;}catch(e){if(String(e).includes('Explorer not initialized'))return false;throw e;}},undefined,{timeout:180000});
  await page.locator('.uno-loader').waitFor({state:'detached',timeout:180000});
+ await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectGallery()).open);
+ await page.screenshot({path:resolve(output,'gallery-start-dpr'+dpr+'.png'),scale:'css'});
+ const openBounds=await page.evaluate(()=>JSON.parse(globalThis.chartBridge.ActionBounds('Open example')));
+ await page.mouse.click(openBounds.x+openBounds.width/2,openBounds.y+openBounds.height/2);
+ await page.waitForFunction(()=>!JSON.parse(globalThis.chartBridge.InspectGallery()).open);
  if(fallback)await command('backend','Skia');
  await waitFor(s=>s.vertices>0&&count(s)>0&&backend(s),suite+' presentation',180000);return context;
 }
@@ -78,6 +84,8 @@ async function click(title){const b=await page.evaluate(t=>JSON.parse(globalThis
 async function download(title,name){const pending=page.waitForEvent('download',{timeout:45000});await click(title);const file=await pending;const path=resolve(output,name??file.suggestedFilename());await file.saveAs(path);return readFile(path);}
 try{
  let context=await open(1);
+ await validateGallery(page,{inspect,scenario,output});
+ await waitFor(s=>s.vertices>0&&count(s)>0&&backend(s),'chart after gallery');
  await scenario('initial visible chart',()=>image('initial'));
  const examples=(await inspect()).examples;assert.equal(examples.length,31);
  for(const id of examples)await scenario('example: '+id,async()=>{await select(id);return image('example-'+id);});
@@ -148,7 +156,7 @@ try{
  const intensityDpr2=resolve(output,'dpr2-intensity');await mkdir(intensityDpr2,{recursive:true});
  await validateIntensity(page,{inspect,select,scenario:(name,run)=>scenario('DPR 2: '+name,run),output:intensityDpr2});
  await scenario('tablet and mobile layout',async()=>{
-  await select('signals');await page.setViewportSize({width:760,height:820});await waitFor(s=>s.bounds.width>300&&s.bounds.width<760,'tablet layout');await image('tablet');
+  await select('signals');await page.setViewportSize({width:760,height:820});await waitFor(s=>s.bounds.width>300&&s.bounds.width<=760,'tablet layout');await image('tablet');
   await page.setViewportSize({width:480,height:800});await waitFor(s=>s.bounds.width>350&&s.bounds.width<=480,'mobile layout');await image('mobile');
  });
  await validateCompactActions(page,inspect,scenario,image);

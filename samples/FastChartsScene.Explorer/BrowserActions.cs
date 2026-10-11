@@ -2,6 +2,7 @@ using System.Text.Json;
 using FastChartsScene.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
 #if __WASM__
@@ -17,7 +18,7 @@ public static partial class BrowserBridge
     {
         FrameworkElement? Find(DependencyObject node)
         {
-            if(node is Button button&&button.Content is string text&&text==title&&button.ActualWidth>0) return button;
+            if(node is Button button && (AutomationProperties.GetName(button)==title || button.Content is string text&&text==title) && button.ActualWidth>0 && button.Visibility==Visibility.Visible) return button;
             for(var i=0;i<VisualTreeHelper.GetChildrenCount(node);i++) { var found=Find(VisualTreeHelper.GetChild(node,i)); if(found!=null) return found; }
             return null;
         }

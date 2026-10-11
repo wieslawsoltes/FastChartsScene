@@ -50,3 +50,10 @@ Full parity requires a specified reference version and exhaustive API/property i
 ## Performance review
 
 [PERFORMANCE.md](PERFORMANCE.md) records fixes, allocation and cache regressions, CPU measurements, WebGL recovery tests and remaining review boundaries. Measured CPU hot-path improvements are not hardware-GPU or full-product performance parity.
+
+## Explorer UI increment
+
+The reference-style tile/list gallery, keyword/phrase and category/tag filters, portable
+favorites, real cached thumbnails, chart-first shell, property filtering and standalone
+Uno project extraction are described in [EXPLORER-UI.md](EXPLORER-UI.md). This adds workflows
+and visual alignment, not every original command, property or exact pixel compatibility.
