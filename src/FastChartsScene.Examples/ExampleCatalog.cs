@@ -136,10 +136,11 @@ public static partial class ExampleCatalog
     private static ChartDocument Spectrogram()
     {
         const double rate=1024; var samples=Enumerable.Range(0,8192).Select(i=> { var t=i/rate; return Math.Sin(2*Math.PI*(25*t+14*t*t))+.3*Math.Sin(2*Math.PI*175*t); }).ToArray();
-        var stft=Fourier.Spectrogram(samples,rate,256,64); var values=new double[stft.TimeBins*stft.FrequencyBins];
-        for(var t=0;t<stft.TimeBins;t++) for(var bin=0;bin<stft.FrequencyBins;bin++) values[bin*stft.TimeBins+t]=20*Math.Log10(Math.Max(1e-5,stft.Values[t*stft.FrequencyBins+bin]));
-        var d=Document("Chirp spectrogram","Time","Frequency"); d.XAxis.Units="s"; d.YAxis.Units="Hz"; d.XAxis.Range=new(0,(stft.TimeBins-1)*stft.TimeStep); d.YAxis.Range=new(0,512); d.ShowLegend=false;
-        d.Series.Add(new HeatmapSeries { Title="Amplitude (dB)",ShowColorBar=true,ValueTitle="Amplitude",ValueUnits="dB",Grid=new(stft.TimeBins,stft.FrequencyBins,0,d.XAxis.Range.Maximum,0,512,values) }); return d;
+        // The STFT result is already frequency-major decibels; do not transpose or log it again.
+        var stft=Fourier.Spectrogram(samples,rate,256,64);
+        var d=Document("Chirp spectrogram","Window start time","Frequency"); d.XAxis.Units="s"; d.YAxis.Units="Hz"; d.XAxis.Range=new(0,(stft.TimeBins-1)*stft.TimeStep); d.YAxis.Range=new(0,512); d.ShowLegend=false;
+        d.Subtitle="Hann STFT · 0 dB = unit peak amplitude · window-start timestamps";
+        d.Series.Add(new HeatmapSeries { Title="Amplitude (dB)",ShowColorBar=true,ValueTitle="Amplitude",ValueUnits="dB",ColorScale=new(range:new AxisRange(-100,0)),Grid=new(stft.TimeBins,stft.FrequencyBins,0,d.XAxis.Range.Maximum,0,512,stft.Values) }); return d;
     }
     private static ChartDocument Polar()
     {

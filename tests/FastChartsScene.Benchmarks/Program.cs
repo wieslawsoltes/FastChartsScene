@@ -5,6 +5,7 @@ using FastChartsScene.Charts;
 using FastChartsScene.Core;
 using FastChartsScene.Data;
 using FastChartsScene.Rendering;
+using FastChartsScene.SignalProcessing;
 
 // Diagnostic microbenchmarks, not performance acceptance thresholds. The baseline reproduces
 // the previous implementation; both paths consume identical input and verify output checksums.
@@ -59,6 +60,20 @@ void Measure(string name,Func<double> action)
 }
 Measure("heatmap-exhaustive",Exhaustive); Measure("heatmap-visible-cells",Culled);
 Measure("rolling-snapshot-two-copies",OldSnapshot); Measure("rolling-snapshot-owned",NewSnapshot);
+var signal=Enumerable.Range(0,8192).Select(i=>Math.Sin(i*.31)+.3*Math.Sin(i*.017)).ToArray();
+double[] OldStft()
+{
+    const int length=256,hop=64; var columns=1+(signal.Length-length)/hop; var rows=length/2+1; var data=new double[columns*rows];
+    for(var col=0;col<columns;col++)
+    {
+        var spectrum=Fourier.Spectrum(signal.AsSpan(col*hop,length),1024);
+        for(var row=0;row<rows;row++) data[row*columns+col]=20*Math.Log10(Math.Max(spectrum.Amplitudes[row],1e-12));
+    }
+    return data;
+}
+if(!OldStft().SequenceEqual(Fourier.Spectrogram(signal,1024).Values)) throw new InvalidOperationException("STFT values differ from the per-window reference.");
+Measure("stft-per-window-spectrum",()=>OldStft().Sum());
+Measure("stft-reused-scratch",()=>Fourier.Spectrogram(signal,1024).Values.Sum());
 var output=Path.GetFullPath(args.Length>0?args[0]:"artifacts/performance.json"); Directory.CreateDirectory(Path.GetDirectoryName(output)!);
 File.WriteAllText(output,JsonSerializer.Serialize(new { runtime=Environment.Version.ToString(),os=Environment.OSVersion.ToString(),
     note="CPU microbenchmarks on one CI runner; no hardware GPU, full-frame, latency or reference-product performance claim.",
