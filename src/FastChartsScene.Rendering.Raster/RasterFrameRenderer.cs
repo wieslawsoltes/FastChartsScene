@@ -137,13 +137,14 @@ public static class RasterFrameRenderer
                     var denominator=a.InverseW*w0+b.InverseW*w1+c.InverseW*w2;
                     if(!(denominator>0)) continue;
                     var color=(a.Color*(float)(a.InverseW*w0)+b.Color*(float)(b.InverseW*w1)+c.Color*(float)(c.InverseW*w2))/(float)denominator;
+                    if(color.W<=0) continue;
                     Blend(pixel,color); if(depthTest) _depth[pixel]=z;
                 }
             }
         }
         private void Point(ClipVertex vertex,DrawBatch batch)
         {
-            if(vertex.Position.W<=0) return;
+            if(vertex.Position.W<=0||vertex.Color.W<=0) return;
             for(var plane=0;plane<6;plane++) if(Distance(vertex,plane)<0) return;
             var v=Project(vertex); var radius=batch.PointSize*_width/_frame.Metadata.Width/2;
             var left=Math.Max(_left,(int)Math.Ceiling(v.X-radius-.5)); var right=Math.Min(_right-1,(int)Math.Ceiling(v.X+radius-.5)-1);

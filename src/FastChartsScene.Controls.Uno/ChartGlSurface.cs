@@ -63,7 +63,7 @@ internal sealed class ChartGlSurface : GLCanvasElement
             fragment=Shader(gl,ShaderType.FragmentShader,"""
                 in vec4 vColor;
                 out vec4 fragmentColor;
-                void main() { fragmentColor=vColor; }
+                void main() { if(vColor.a<=0.0) discard; fragmentColor=vColor; }
                 """);
             _program=gl.CreateProgram(); gl.AttachShader(_program,vertex); gl.AttachShader(_program,fragment); gl.LinkProgram(_program);
             gl.GetProgram(_program,GLEnum.LinkStatus,out var linked);

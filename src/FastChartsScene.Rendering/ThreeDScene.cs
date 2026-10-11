@@ -24,16 +24,10 @@ internal static class ThreeDScene
     {
         var p=layout.Plot; var matrix=CameraMatrix(d.Camera,p,f.Width,f.Height); var start=f.Count;
         f.Rect(p,d.Theme.Plot); f.Batch(start,new(0,0,f.Width,f.Height));
-        Vector3 Map(Point3D v)
-        {
-            var result=new Vector3((float)(2*d.XAxis.ToUnit(v.X)-1),(float)(2*d.YAxis.ToUnit(v.Y)-1),(float)(2*d.ZAxis.ToUnit(v.Z)-1));
-            if(!float.IsFinite(result.X)||!float.IsFinite(result.Y)||!float.IsFinite(result.Z)) throw new InvalidOperationException("3D coordinate is outside the axis domain.");
-            return result;
-        }
         if(d.View==ChartView.ThreeD)
         {
             start=f.Count;
-            for(var i=0;i<=10;i++)
+            for(var i=0;d.ShowGrid && i<=10;i++)
             {
                 var t=-1+i*.2f;
                 Tube(f,new(t,-1,-1),new(t,-1,1),.0025f,d.Theme.Grid);
@@ -58,10 +52,17 @@ internal static class ThreeDScene
                 if(s is not PieSeries pie) throw new NotSupportedException("Pie3D requires PieSeries.");
                 BuildPie(pie,f); f.Batch(start,p,true,matrix); continue;
             }
+            var xAxis = d.FindX(s.XAxisId); var yAxis = d.FindY(s.YAxisId);
+            Vector3 Map(Point3D v)
+            {
+                var result=new Vector3((float)(2*xAxis.ToUnit(v.X)-1),(float)(2*yAxis.ToUnit(v.Y)-1),(float)(2*d.ZAxis.ToUnit(v.Z)-1));
+                if(!float.IsFinite(result.X)||!float.IsFinite(result.Y)||!float.IsFinite(result.Z)) throw new InvalidOperationException("3D coordinate is outside the axis domain.");
+                return result;
+            }
             switch(s)
             {
                 case SurfaceSeries3D surface:
-                    var g=surface.Grid;
+                    var g=surface.Grid; var surfaceScale=surface.ResolveColorScale();
                     for(var row=0;row<g.Rows-1;row++) for(var col=0;col<g.Columns-1;col++)
                     {
                         var v0=g[col,row]; var v1=g[col+1,row]; var v2=g[col+1,row+1]; var v3=g[col,row+1];
@@ -69,26 +70,26 @@ internal static class ThreeDScene
                         var b=double.IsFinite(v1)?Map(new(g.X(col+1),v1,g.Y(row))):default;
                         var c=double.IsFinite(v2)?Map(new(g.X(col+1),v2,g.Y(row+1))):default;
                         var e=double.IsFinite(v3)?Map(new(g.X(col),v3,g.Y(row+1))):default;
-                        if(double.IsFinite(v0)&&double.IsFinite(v1)&&double.IsFinite(v2)) f.Triangle3D(a,c,b,Palette.Heat(g.Normalized(v0)),Palette.Heat(g.Normalized(v2)),Palette.Heat(g.Normalized(v1)));
-                        if(double.IsFinite(v0)&&double.IsFinite(v2)&&double.IsFinite(v3)) f.Triangle3D(a,e,c,Palette.Heat(g.Normalized(v0)),Palette.Heat(g.Normalized(v3)),Palette.Heat(g.Normalized(v2)));
+                        if(double.IsFinite(v0)&&double.IsFinite(v1)&&double.IsFinite(v2)) f.Triangle3D(a,c,b,surfaceScale.Color(v0),surfaceScale.Color(v2),surfaceScale.Color(v1));
+                        if(double.IsFinite(v0)&&double.IsFinite(v2)&&double.IsFinite(v3)) f.Triangle3D(a,e,c,surfaceScale.Color(v0),surfaceScale.Color(v3),surfaceScale.Color(v2));
                     }
                     break;
                 case WaterfallSeries3D waterfall:
-                    var wg=waterfall.Grid;
-                    for(var row=0;row<wg.Rows;row++) for(var col=1;col<wg.Columns;col++)
+                    var wg=waterfall.Grid; var waterfallScale=waterfall.ResolveColorScale();
+                    for(var row=0;waterfall.StrokeWidth>0 && row<wg.Rows;row++) for(var col=1;col<wg.Columns;col++)
                     {
                         var v0=wg[col-1,row]; var v1=wg[col,row]; if(!double.IsFinite(v0)||!double.IsFinite(v1)) continue;
-                        Tube(f,Map(new(wg.X(col-1),v0,wg.Y(row))),Map(new(wg.X(col),v1,wg.Y(row))),.004f,Palette.Heat((double)row/Math.Max(1,wg.Rows-1)));
+                        Tube(f,Map(new(wg.X(col-1),v0,wg.Y(row))),Map(new(wg.X(col),v1,wg.Y(row))), (float)(waterfall.StrokeWidth * (.004 / 1.5)),waterfallScale.Color(v0),waterfallScale.Color(v1));
                     }
                     break;
                 case BarSeries3D bars:
-                    var bg=bars.Grid;
+                    var bg=bars.Grid; var barScale=bars.ResolveColorScale();
                     for(var row=0;row<bg.Rows;row++) for(var col=0;col<bg.Columns;col++)
                     {
                         var v=bg[col,row]; if(!double.IsFinite(v)) continue;
-                        var q=Map(new(bg.X(col),v,bg.Y(row))); var bottom=Map(new(bg.X(col),Math.Clamp(0,d.YAxis.Range.Minimum,d.YAxis.Range.Maximum),bg.Y(row)));
+                        var q=Map(new(bg.X(col),v,bg.Y(row))); var bottom=Map(new(bg.X(col),Math.Clamp(0,yAxis.Range.Minimum,yAxis.Range.Maximum),bg.Y(row)));
                         var dx=.7f/Math.Max(1,bg.Columns); var dz=.7f/Math.Max(1,bg.Rows);
-                        Box(f,new(q.X-dx,Math.Min(bottom.Y,q.Y),q.Z-dz),new(q.X+dx,Math.Max(bottom.Y,q.Y),q.Z+dz),Palette.Heat(bg.Normalized(v)));
+                        Box(f,new(q.X-dx,Math.Min(bottom.Y,q.Y),q.Z-dz),new(q.X+dx,Math.Max(bottom.Y,q.Y),q.Z+dz),barScale.Color(v));
                     }
                     break;
                 case MeshSeries3D mesh:
@@ -104,7 +105,7 @@ internal static class ThreeDScene
                     for(var i=0;i<points.Length;i++)
                     {
                         var q=Map(points[i]);
-                        if(line.ShowLine&&i>0) Tube(f,Map(points[i-1]),q,(float)Math.Max(.001,line.StrokeWidth*.002),line.Color);
+                        if(line.ShowLine&&line.StrokeWidth>0&&i>0) Tube(f,Map(points[i-1]),q,(float)Math.Max(.001,line.StrokeWidth*.002),line.Color);
                         if(line.PointSize>0) { var r=(float)(line.PointSize*.002); Box(f,q-new Vector3(r),q+new Vector3(r),line.Color); }
                     }
                     break;
@@ -114,23 +115,27 @@ internal static class ThreeDScene
         }
         if(d.Annotations.Count>0) throw new NotSupportedException("3D annotations are not implemented.");
     }
-    private static void Tube(FrameBuilder f,Vector3 a,Vector3 b,float radius,ColorRgba color)
+    private static readonly Vector2[] TubeRing = Enumerable.Range(0, 7).Select(i =>
+    {
+        var angle = i * MathF.PI / 3;
+        return new Vector2(MathF.Cos(angle), MathF.Sin(angle));
+    }).ToArray();
+    private static void Tube(FrameBuilder f,Vector3 a,Vector3 b,float radius,ColorRgba color,ColorRgba? endColor=null)
     {
         var delta=b-a; if(delta.LengthSquared()<1e-16f) return;
         var axis=Vector3.Normalize(delta); var up=Math.Abs(axis.Y)<.9f?Vector3.UnitY:Vector3.UnitX;
         var u=Vector3.Normalize(Vector3.Cross(axis,up))*radius; var v=Vector3.Normalize(Vector3.Cross(axis,u))*radius;
         for(var i=0;i<6;i++)
         {
-            var a0=i*MathF.PI/3; var a1=(i+1)*MathF.PI/3;
-            var n0=MathF.Cos(a0)*u+MathF.Sin(a0)*v; var n1=MathF.Cos(a1)*u+MathF.Sin(a1)*v;
-            f.Triangle3D(a+n0,b+n0,b+n1,color,color,color); f.Triangle3D(a+n0,b+n1,a+n1,color,color,color);
+            var n0=TubeRing[i].X*u+TubeRing[i].Y*v; var n1=TubeRing[i+1].X*u+TubeRing[i+1].Y*v;
+            f.Triangle3D(a+n0,b+n0,b+n1,color,endColor??color,endColor??color); f.Triangle3D(a+n0,b+n1,a+n1,color,endColor??color,color);
         }
     }
     private static void Box(FrameBuilder f,Vector3 min,Vector3 max,ColorRgba color)
     {
-        Vector3[] v=[new(min.X,min.Y,min.Z),new(max.X,min.Y,min.Z),new(max.X,max.Y,min.Z),new(min.X,max.Y,min.Z),
-            new(min.X,min.Y,max.Z),new(max.X,min.Y,max.Z),new(max.X,max.Y,max.Z),new(min.X,max.Y,max.Z)];
-        int[] indices=[0,2,1,0,3,2,4,5,6,4,6,7,0,1,5,0,5,4,3,7,6,3,6,2,0,4,7,0,7,3,1,2,6,1,6,5];
+        Span<Vector3> v=stackalloc Vector3[] {new(min.X,min.Y,min.Z),new(max.X,min.Y,min.Z),new(max.X,max.Y,min.Z),new(min.X,max.Y,min.Z),
+            new(min.X,min.Y,max.Z),new(max.X,min.Y,max.Z),new(max.X,max.Y,max.Z),new(min.X,max.Y,max.Z)};
+        ReadOnlySpan<int> indices=[0,2,1,0,3,2,4,5,6,4,6,7,0,1,5,0,5,4,3,7,6,3,6,2,0,4,7,0,7,3,1,2,6,1,6,5];
         for(var i=0;i<indices.Length;i+=3) f.Triangle3D(v[indices[i]],v[indices[i+1]],v[indices[i+2]],color,color,color);
     }
     private static void BuildPie(PieSeries pie,FrameBuilder f)

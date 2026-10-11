@@ -7,7 +7,7 @@ namespace FastChartsScene.Rendering;
 
 /// <summary>Compiles chart models into clipped GPU triangles. UI-thread-affine; immutable data indexes
 /// are weakly cached, and an unchanged document/size reuses its entire frame without allocating.</summary>
-public sealed class SceneCompiler
+public sealed partial class SceneCompiler
 {
     private readonly ConditionalWeakTable<IDataSource, EnvelopeIndex> _indexes = new();
     private ChartDocument? _document;
@@ -16,6 +16,7 @@ public sealed class SceneCompiler
     public RenderFrame Compile(ChartDocument document, double width, double height)
     {
         ArgumentNullException.ThrowIfNull(document);
+        ObjectDisposedException.ThrowIf(document.IsDisposed, document);
         if (ReferenceEquals(document, _document) && _frame is { } cached && cached.Metadata.Revision == document.Revision &&
             cached.Metadata.Width == width && cached.Metadata.Height == height) return cached;
         var layout = ChartLayout.Create(document, width, height);
@@ -30,14 +31,15 @@ public sealed class SceneCompiler
             case ChartView.ThreeD: case ChartView.Pie3D: ThreeDScene.Build(document, layout, f); break;
             default: throw new NotSupportedException($"Unknown chart view {document.View}.");
         }
+        BuildColorBars(document, layout, f);
         if (document.ShowLegend) BuildLegend(document, layout, f);
-        _frame = new(f.Vertices.ToArray(), new(width, height, document.Theme.Background.ToHex(),
+        var frame = new RenderFrame(f.Vertices.ToArray(), new(width, height, document.Theme.Background.ToHex(),
             f.Batches.ToArray(), f.Labels.ToArray(), f.Hits.ToArray(), layout.Plot, document.Revision,
             document.TotalPoints, f.Count, document.Title), layout);
-        _frame.Validate(); _document = document; CompilationCount++;
-        return _frame;
+        frame.Validate(); _frame = frame; _document = document; CompilationCount++;
+        return frame;
     }
-    public void ClearCache() { _document = null; _frame = null; _indexes.Clear(); }
+    public void ClearCache() { _document = null; _frame = null; _indexes.Clear(); _contours.Clear(); }
 
     private void BuildXY(ChartDocument d, ChartLayout l, FrameBuilder f)
     {
@@ -109,22 +111,10 @@ public sealed class SceneCompiler
                     }
                     break;
                 case ContourSeries contour:
-                    foreach (var segment in GeometryAlgorithms.Contours(contour.Grid,contour.Levels.Span))
-                        f.Line(Map(segment.A),Map(segment.B),Palette.Heat(contour.Grid.Normalized(segment.Level)),contour.StrokeWidth,p);
+                    DrawContours(contour, f, p, Map);
                     break;
                 case HeatmapSeries heat when s.GetType()==typeof(HeatmapSeries):
-                    var g=heat.Grid;
-                    // Samples are cell centers. Boundary cells stop at the declared grid extents.
-                    for (var row=0;row<g.Rows;row++) for(var col=0;col<g.Columns;col++)
-                    {
-                        var v=g[col,row]; if(!double.IsFinite(v)) continue;
-                        var x0=col==0?g.XMinimum:(g.X(col-1)+g.X(col))/2;
-                        var x1=col==g.Columns-1?g.XMaximum:(g.X(col)+g.X(col+1))/2;
-                        var y0=row==0?g.YMinimum:(g.Y(row-1)+g.Y(row))/2;
-                        var y1=row==g.Rows-1?g.YMaximum:(g.Y(row)+g.Y(row+1))/2;
-                        var a=Map(new(x0,y0)); var b=Map(new(x1,y1));
-                        FillPolygon(f,[a,new(b.X,a.Y),b,new(a.X,b.Y)],Palette.Heat(g.Normalized(v)),p);
-                    }
+                    DrawHeatmap(heat, l, x, y, f);
                     break;
                 default: throw new NotSupportedException($"{s.GetType().Name} cannot be rendered in the XY view.");
             }

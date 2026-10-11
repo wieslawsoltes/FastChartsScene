@@ -149,6 +149,7 @@ public sealed partial class ExplorerPage : Page
         _inspector.Children.Add(Label("SERIES",11));
         foreach(var s in d.Series)
         {
+            if(s is HeatmapSeries heat) _inspector.Children.Add(new IntensityScaleEditor { Series=heat });
             Check(s.Title,s.Visible,v=>s.Visible=v);
             var width=new Slider { Minimum=0,Maximum=6,StepFrequency=.25,Value=s.StrokeWidth,Header="Stroke width" }; width.ValueChanged+=(_,_)=>s.StrokeWidth=width.Value; _inspector.Children.Add(width);
             if(s is LineSeries line)

@@ -37,6 +37,13 @@ public sealed class ChartControl : UserControl,IDisposable
     public double CompileMilliseconds { get; private set; }
     public long GpuSubmissions=>_gpu.Submissions;
     public long OverlayDraws=>_overlay.DrawCount;
+    public ScalarDataHit? ScalarHit => _overlay.ScalarHit;
+    public event EventHandler? ScalarHitChanged;
+    private void SetScalarHit(ScalarDataHit? hit)
+    {
+        if(Equals(_overlay.ScalarHit,hit)) return;
+        _overlay.ScalarHit=hit; ScalarHitChanged?.Invoke(this,EventArgs.Empty);
+    }
     public event EventHandler? FrameChanged;
     public event EventHandler? RenderCompleted;
     public ChartControl()
@@ -50,7 +57,7 @@ public sealed class ChartControl : UserControl,IDisposable
         _gpu.Rendered+=()=>RenderCompleted?.Invoke(this,EventArgs.Empty); _overlay.Rendered+=()=>RenderCompleted?.Invoke(this,EventArgs.Empty);
         Loaded+=OnLoaded; Unloaded+=OnUnloaded; SizeChanged+=(_,_)=>RequestDraw();
         PointerPressed+=Pressed; PointerMoved+=Moved; PointerReleased+=Released; PointerCanceled+=Canceled; PointerCaptureLost+=CaptureLost;
-        PointerWheelChanged+=Wheel; PointerExited+=(_,_)=> { if(_pointers.Count==0) { _overlay.Cursor=null; _overlay.Hit=null; _overlay.Invalidate(); } };
+        PointerWheelChanged+=Wheel; PointerExited+=(_,_)=> { if(_pointers.Count==0) { _overlay.Cursor=null; _overlay.Hit=null; SetScalarHit(null); _overlay.Invalidate(); } };
         DoubleTapped+=(_,e)=> { Safe(()=>_input?.ResetView()); e.Handled=true; }; RightTapped+=(_,e)=>e.Handled=true; KeyDown+=Key;
         ManipulationMode=ManipulationModes.None;
     }
@@ -60,7 +67,7 @@ public sealed class ChartControl : UserControl,IDisposable
         if(e.OldValue is ChartDocument old) old.Changed-=c.OnModelChanged;
         c.Cancel(); c._compiler.ClearCache(); c._input=e.NewValue is ChartDocument current?new ChartInteraction(current):null;
         if(c._attached&&e.NewValue is ChartDocument d) d.Changed+=c.OnModelChanged;
-        c.Frame=null; c._overlay.Cursor=null; c._overlay.Hit=null; c.RequestDraw();
+        c.Frame=null; c._overlay.Cursor=null; c._overlay.Hit=null; c.SetScalarHit(null); c.RequestDraw();
     }
     private void OnLoaded(object sender,RoutedEventArgs e)
     {
@@ -73,7 +80,7 @@ public sealed class ChartControl : UserControl,IDisposable
     {
         _attached=false; if(Document is { } d) d.Changed-=OnModelChanged;
         if(_observedRoot!=null) _observedRoot.Changed-=RootChanged; _observedRoot=null;
-        Cancel(); _overlay.Reset(); _compiler.ClearCache();
+        Cancel(); _overlay.Cursor=null; _overlay.Hit=null; SetScalarHit(null); _overlay.Reset(); _compiler.ClearCache();
     }
     private void RootChanged(XamlRoot sender,XamlRootChangedEventArgs args)=>RequestDraw();
     private void OnModelChanged(object? sender,EventArgs e)=>RequestDraw();
@@ -105,6 +112,11 @@ public sealed class ChartControl : UserControl,IDisposable
         }
         catch(Exception e) { LastError=e.Message; Frame=null; _overlay.Message=e.Message; }
         _gpu.Frame=Frame; _overlay.Frame=Frame;
+        if(Frame is { } current && _overlay.Cursor is { } cursor && _input!=null)
+        {
+            Safe(()=> { _overlay.Hit=_input.HitTestData(current,cursor); SetScalarHit(_input.HitTestScalar(current,cursor)); });
+        }
+        else SetScalarHit(null);
         if(gpu) _gpu.Invalidate(); _overlay.Invalidate(); FrameChanged?.Invoke(this,EventArgs.Empty);
     }
     private static PointD Point(PointerRoutedEventArgs e,UIElement relative)
@@ -139,7 +151,7 @@ public sealed class ChartControl : UserControl,IDisposable
             else { _pointers[id]=p; Safe(()=>_input.Pan(frame,_first,p.X-_last.X,p.Y-_last.Y)); }
             _last=p; e.Handled=true;
         }
-        _overlay.Cursor=p; Safe(()=>_overlay.Hit=_input.HitTestData(frame,p)); _overlay.Invalidate();
+        _overlay.Cursor=p; Safe(()=> { _overlay.Hit=_input.HitTestData(frame,p); SetScalarHit(_input.HitTestScalar(frame,p)); }); _overlay.Invalidate();
     }
     private void Released(object sender,PointerRoutedEventArgs e)
     {

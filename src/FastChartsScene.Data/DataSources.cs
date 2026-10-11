@@ -50,6 +50,15 @@ public sealed class UniformData : IDataSource
         if(samples.Contains(double.PositiveInfinity)||samples.Contains(double.NegativeInfinity)) throw new ArgumentException("Infinite samples are invalid.");
         Start=start; Step=step; _samples=samples.ToArray();
     }
+    // Only RollingBuffer calls this with a newly allocated, validated snapshot array.
+    // The public constructor still defensively copies caller-owned samples.
+    private UniformData(double start, double step, double[] owned, bool validated)
+    {
+        if (!validated || !double.IsFinite(start) || !double.IsFinite(step) || step <= 0 ||
+            !double.IsFinite(start + step * Math.Max(0, owned.Length - 1))) throw new ArgumentOutOfRangeException(nameof(step));
+        Start = start; Step = step; _samples = owned;
+    }
+    internal static UniformData OwnSnapshot(double start, double step, double[] owned) => new(start, step, owned, true);
     public double X(int i) { if((uint)i>=(uint)Count) throw new ArgumentOutOfRangeException(nameof(i)); return Start+Step*i; }
     public double Y(int i)=>_samples[i];
 }
@@ -77,7 +86,18 @@ public sealed class RollingBuffer
         lock(_gate)
         {
             if(_written>long.MaxValue-values.Length || !double.IsFinite(Start+Step*(_written+values.Length))) throw new OverflowException("Sample time overflow.");
-            foreach(var v in values) { _data[_head]=v; _head=(_head+1)%Capacity; _count=Math.Min(_count+1,Capacity); _written++; }
+            _written += values.Length;
+            if (values.Length >= Capacity)
+            {
+                values[^Capacity..].CopyTo(_data); _head = 0; _count = Capacity;
+            }
+            else
+            {
+                var first = Math.Min(values.Length, Capacity - _head);
+                values[..first].CopyTo(_data.AsSpan(_head)); values[first..].CopyTo(_data);
+                _head = (int)(((long)_head + values.Length) % Capacity);
+                _count += Math.Min(values.Length, Capacity - _count);
+            }
         }
     }
     public UniformData Snapshot()
@@ -85,8 +105,10 @@ public sealed class RollingBuffer
         lock(_gate)
         {
             var result=new double[_count]; var first=(_head-_count+Capacity)%Capacity;
-            for(var i=0;i<_count;i++) result[i]=_data[(first+i)%Capacity];
-            return new(Start+(_written-_count)*Step,Step,result);
+            var contiguous = Math.Min(_count, Capacity - first);
+            _data.AsSpan(first, contiguous).CopyTo(result);
+            _data.AsSpan(0, _count - contiguous).CopyTo(result.AsSpan(contiguous));
+            return UniformData.OwnSnapshot(Start+(_written-_count)*Step,Step,result);
         }
     }
     public void Clear() { lock(_gate) { _head=_count=0; _written=0; } }

@@ -5,6 +5,8 @@ import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
 import { validateCompactActions } from './responsive-tests.mjs';
+import { validateIntensity } from './intensity-tests.mjs';
+import { observeChartContexts, validateGpuLifecycle } from './gpu-lifecycle-tests.mjs';
 
 const fallback=process.env.RENDER_MODE==='Skia';
 const suite=fallback?'Skia fallback':'WebGL GPU';
@@ -42,6 +44,7 @@ async function scenario(name,action){
 async function open(dpr){
  const context=await browser.newContext({viewport:{width:1440,height:960},deviceScaleFactor:dpr,acceptDownloads:true});page=await context.newPage();
  page.on('console',m=>consoleLog.push({type:m.type(),text:m.text()}));page.on('pageerror',e=>pageErrors.push(e.message));
+ await observeChartContexts(page);
  await page.goto(url,{waitUntil:'domcontentloaded',timeout:180000});
  await page.waitForFunction(()=>globalThis.Module?.getAssemblyExports,undefined,{timeout:180000});
  await page.evaluate(async()=>{
@@ -76,7 +79,7 @@ async function download(title,name){const pending=page.waitForEvent('download',{
 try{
  let context=await open(1);
  await scenario('initial visible chart',()=>image('initial'));
- const examples=(await inspect()).examples;assert.equal(examples.length,29);
+ const examples=(await inspect()).examples;assert.equal(examples.length,31);
  for(const id of examples)await scenario('example: '+id,async()=>{await select(id);return image('example-'+id);});
  await scenario('pointer wheel preserves delivered data anchor',async()=>{
   const before=await select('signals'),p=center(before,.3,.55);await page.mouse.click(p.x,p.y);await page.evaluate(()=>{globalThis.lastChartWheel=null;});await page.mouse.wheel(0,-120);
@@ -138,8 +141,12 @@ try{
   await select('surface');const before=await inspect();await command('backend','Skia');await waitFor(s=>s.backend==='Skia (explicit)'&&s.overlayDraws>before.overlayDraws,'3D fallback');await image('3d-fallback');
   await command('backend','Auto');await waitFor(s=>s.backend.startsWith('OpenGL'),'restore GPU');await image('gpu-restored');
  });
+ if(!fallback)await validateGpuLifecycle(page,{inspect,select,scenario,image});
+ await validateIntensity(page,{inspect,select,scenario,output});
  await context.close();context=await open(2);
  for(const id of ['signals','heatmap','surface'])await scenario('DPR 2: '+id,async()=>{await select(id);return image('dpr2-'+id);});
+ const intensityDpr2=resolve(output,'dpr2-intensity');await mkdir(intensityDpr2,{recursive:true});
+ await validateIntensity(page,{inspect,select,scenario:(name,run)=>scenario('DPR 2: '+name,run),output:intensityDpr2});
  await scenario('tablet and mobile layout',async()=>{
   await select('signals');await page.setViewportSize({width:760,height:820});await waitFor(s=>s.bounds.width>300&&s.bounds.width<760,'tablet layout');await image('tablet');
   await page.setViewportSize({width:480,height:800});await waitFor(s=>s.bounds.width>350&&s.bounds.width<=480,'mobile layout');await image('mobile');

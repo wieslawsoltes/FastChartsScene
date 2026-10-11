@@ -50,7 +50,7 @@ public static class ChartDataExport
                 case HeatmapSeries heat:
                     var g=heat.Grid;
                     for(var row=0;row<g.Rows;row++) for(var col=0;col<g.Columns;col++)
-                        Row("grid",row*g.Columns+col,g.X(col),g.Y(row),value:g[col,row]);
+                        Row("grid",row*g.Columns+col,g.X(col),g.Y(row),value:g[col,row],color:heat.ResolveColorScale().Color(g[col,row]).ToHex());
                     break;
                 case PointLineSeries3D spatial:
                     for(var i=0;i<spatial.Points.Length;i++) { var p=spatial.Points.Span[i]; Row("point3d",i,p.X,p.Y,p.Z); }

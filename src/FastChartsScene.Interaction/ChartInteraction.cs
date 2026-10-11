@@ -8,7 +8,7 @@ namespace FastChartsScene.Interaction;
 public sealed record DataHit(string SeriesId,string Title,int Index,PointD Data,PointD Screen,double Distance);
 
 /// <summary>Platform-neutral chart input logic. Viewport edits are transactional; a drag becomes one undo entry.</summary>
-public sealed class ChartInteraction
+public sealed partial class ChartInteraction
 {
     private sealed record ViewState(Dictionary<Axis,AxisRange> Ranges,double Azimuth,double Elevation,double Distance,bool Orthographic);
     private readonly ChartDocument _document;
