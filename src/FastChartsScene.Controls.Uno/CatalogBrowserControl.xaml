@@ -6,7 +6,7 @@
     Background="#303030">
     <UserControl.Resources>
         <DataTemplate x:Key="TileTemplate" x:DataType="local:CatalogCard">
-            <Grid Width="232" Padding="5" RowSpacing="4">
+            <Grid Background="#303030" Width="232" Padding="5" RowSpacing="4">
                 <Grid.RowDefinitions><RowDefinition Height="140"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <Border Background="#161616" BorderBrush="#535353" BorderThickness="1">
                     <Grid>
@@ -20,7 +20,7 @@
             </Grid>
         </DataTemplate>
         <DataTemplate x:Key="ListTemplate" x:DataType="local:CatalogCard">
-            <Grid Padding="8,5" ColumnSpacing="12">
+            <Grid Background="#303030" Padding="8,5" ColumnSpacing="12">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="*"/><ColumnDefinition Width="36"/></Grid.ColumnDefinitions>
                 <Border Background="#161616" Width="100" Height="64"><Image Source="{x:Bind Preview, Mode=OneWay}" Stretch="Uniform"/></Border>
                 <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">

@@ -61,7 +61,11 @@ export async function validateGallery(page,{inspect,scenario,output}){
  await scenario('gallery: reference-style tiles display real cached chart previews',async()=>{
   await home();await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectGallery()).generatedPreviews>=3,undefined,{timeout:90000});
   const s=await state();assert.equal(s.visible.length,31);assert(s.cachedPreviews<=32);assert(s.pendingPreviews<=64);assert.equal(s.previewErrors,0);
-  await page.screenshot({path:resolve(output,'gallery-tiles.png'),scale:'css'});return s;
+  const png=PNG.sync.read(await page.screenshot({path:resolve(output,'gallery-tiles.png'),scale:'css'}));
+  const selected=await page.evaluate(id=>JSON.parse(globalThis.chartBridge.GalleryEntryBounds(id)),s.selected);
+  const at=(Math.floor(selected.y+selected.height-32)*png.width+Math.floor(selected.x+selected.width-12))*4;
+  assert(Math.max(png.data[at],png.data[at+1],png.data[at+2])<128,'Selected-card title background must remain dark for readable white text');
+  return s;
  });
  await scenario('gallery: keyword AND search and quoted phrases filter the catalog',async()=>{
   await query('scalar logarithmic');assert.deepEqual((await state()).visible,['color-scales']);
