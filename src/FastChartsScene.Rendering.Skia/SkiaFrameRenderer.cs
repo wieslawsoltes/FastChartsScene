@@ -1,10 +1,12 @@
+using System.Runtime.InteropServices;
 using FastChartsScene.Core;
+using FastChartsScene.Rendering.Raster;
 using SkiaSharp;
 
 namespace FastChartsScene.Rendering.Skia;
 
-/// <summary>Reusable Skia 2D backend and text layer. The host determines whether Skia is GPU- or CPU-backed.
-/// Depth-tested geometry is deliberately rejected, never flattened into an incorrect painter's approximation.</summary>
+/// <summary>Skia vector/text backend with a depth-correct CPU raster path for 3D fallback and PNG.
+/// GPU presentation remains the chart control's default. The host determines Skia's acceleration.</summary>
 public sealed class SkiaFrameRenderer : IDisposable
 {
     private readonly SKPaint _paint=new() { IsAntialias=true,Color=SKColors.White };
@@ -13,22 +15,33 @@ public sealed class SkiaFrameRenderer : IDisposable
     private readonly Dictionary<(float Size,bool Bold),SKFont> _fonts=[];
     private readonly List<(SKVertices Vertices,SKRect Clip)> _meshes=[];
     private RenderFrame? _cached;
+    private SKBitmap? _raster;
+    private int _rasterWidth,_rasterHeight;
     private bool _disposed;
-    public static SKColor Color(ColorRgba c)=>new((byte)Math.Clamp(Math.Round(c.R*255),0,255),(byte)Math.Clamp(Math.Round(c.G*255),0,255),
-        (byte)Math.Clamp(Math.Round(c.B*255),0,255),(byte)Math.Clamp(Math.Round(c.A*255),0,255));
+    public static SKColor Color(ColorRgba c)=>new((byte)Math.Clamp(Math.Round(c.R*255),0,255),(byte)Math.Clamp(Math.Round(c.G*255),0,255),(byte)Math.Clamp(Math.Round(c.B*255),0,255),(byte)Math.Clamp(Math.Round(c.A*255),0,255));
     public static SKRect Rect(RectD r)=>new((float)r.X,(float)r.Y,(float)r.Right,(float)r.Bottom);
     public void Reset()
     {
-        foreach(var mesh in _meshes) mesh.Vertices.Dispose(); _meshes.Clear(); _cached=null;
+        foreach(var mesh in _meshes) mesh.Vertices.Dispose(); _meshes.Clear();
+        _raster?.Dispose(); _raster=null; _rasterWidth=_rasterHeight=0; _cached=null;
     }
-    private void Prepare(RenderFrame frame)
+    private void Prepare(RenderFrame frame,float scale)
     {
-        if(ReferenceEquals(frame,_cached)) return;
+        var spatial=frame.Metadata.Batches.Any(b=>b.DepthTest);
+        var width=spatial?checked((int)Math.Ceiling(frame.Metadata.Width*scale)):0;
+        var height=spatial?checked((int)Math.Ceiling(frame.Metadata.Height*scale)):0;
+        if(ReferenceEquals(frame,_cached)&&width==_rasterWidth&&height==_rasterHeight) return;
         Reset();
-        if(frame.Metadata.Batches.Any(b=>b.DepthTest)) throw new NotSupportedException("This 3D view requires the OpenGL backend. The Skia fallback supports 2D views.");
+        if(spatial)
+        {
+            var image=RasterFrameRenderer.Render(frame,width,height);
+            _raster=new SKBitmap(new SKImageInfo(width,height,SKColorType.Rgba8888,SKAlphaType.Premul));
+            var pixels=image.Pixels.ToArray(); Marshal.Copy(pixels,0,_raster.GetPixels(),pixels.Length);
+            _rasterWidth=width; _rasterHeight=height; _cached=frame; return;
+        }
         foreach(var batch in frame.Metadata.Batches)
         {
-            if(batch.Kind!=PrimitiveKind.Triangles) throw new NotSupportedException("Skia fallback requires triangle batches.");
+            if(batch.Kind!=PrimitiveKind.Triangles) throw new NotSupportedException("Skia vector fallback requires triangle batches.");
             var positions=new SKPoint[batch.Count]; var colors=new SKColor[batch.Count];
             for(var i=0;i<batch.Count;i++)
             {
@@ -45,13 +58,22 @@ public sealed class SkiaFrameRenderer : IDisposable
         ObjectDisposedException.ThrowIf(_disposed,this);
         if(geometry)
         {
-            Prepare(frame); _paint.Color=Color(ColorRgba.Parse(frame.Metadata.Background)); _paint.Style=SKPaintStyle.Fill;
-            canvas.DrawRect(0,0,(float)frame.Metadata.Width,(float)frame.Metadata.Height,_paint);
-            _paint.Color=SKColors.White;
-            foreach(var mesh in _meshes)
+            var transform=canvas.TotalMatrix; var scale=Math.Max(1,Math.Max(Math.Abs(transform.ScaleX),Math.Abs(transform.ScaleY)));
+            Prepare(frame,scale);
+            if(_raster!=null)
             {
-                canvas.Save(); canvas.ClipRect(mesh.Clip,SKClipOperation.Intersect,false);
-                canvas.DrawVertices(mesh.Vertices,SKBlendMode.Modulate,_paint); canvas.Restore();
+                _paint.Color=SKColors.White; _paint.Style=SKPaintStyle.Fill;
+                canvas.DrawBitmap(_raster,new SKRect(0,0,(float)frame.Metadata.Width,(float)frame.Metadata.Height),_paint);
+            }
+            else
+            {
+                _paint.Color=Color(ColorRgba.Parse(frame.Metadata.Background)); _paint.Style=SKPaintStyle.Fill;
+                canvas.DrawRect(0,0,(float)frame.Metadata.Width,(float)frame.Metadata.Height,_paint); _paint.Color=SKColors.White;
+                foreach(var mesh in _meshes)
+                {
+                    canvas.Save(); canvas.ClipRect(mesh.Clip,SKClipOperation.Intersect,false);
+                    canvas.DrawVertices(mesh.Vertices,SKBlendMode.Modulate,_paint); canvas.Restore();
+                }
             }
         }
         if(labels) foreach(var label in frame.Metadata.Labels) DrawLabel(canvas,label);
