@@ -50,7 +50,7 @@ public sealed partial class ExplorerPage : Page
     public ExplorerPage()
     {
         BrowserBridge.Page=this; BuildShell();
-        Chart.FrameChanged+=(_,_)=>UpdateStatus(); _timer.Tick+=(_,_)=>Execute(AppendStream);
+        Chart.FrameChanged+=(_,_)=> { UpdateStatus(); RefreshInspector(); }; _timer.Tick+=(_,_)=>Execute(AppendStream);
         SizeChanged+=(_,_)=>Responsive(); Unloaded+=(_,_)=> { SetStreaming(false); SaveGallerySettings(); };
         SelectExample("signals"); ShowGallery();
     }
@@ -78,47 +78,6 @@ public sealed partial class ExplorerPage : Page
     {
         var b=new StringBuilder("Original samples (first 24)\nIndex        X                  Y\n");
         for(var i=0;i<Math.Min(24,data.Count);i++) b.AppendLine(FormattableString.Invariant($"{i,-10} {data.X(i),-18:G9} {data.Y(i),-18:G9}")); return b.ToString();
-    }
-    private void BuildInspector()
-    {
-        _inspector.Children.Clear(); var d=Document;
-        _inspector.Children.Add(new TextBlock { Text="Properties",FontSize=13,FontWeight=Microsoft.UI.Text.FontWeights.SemiBold });
-        _inspector.Children.Add(_propertySearch);
-        var title=new TextBox { Header="Title",Text=d.Title }; title.TextChanged+=(_,_)=>d.Title=title.Text; _inspector.Children.Add(title);
-        var theme=new ComboBox { Header="Theme",ItemsSource=new[]{"Dark","Light","High contrast"},SelectedIndex=d.Theme==ChartTheme.Light?1:d.Theme==ChartTheme.HighContrast?2:0,HorizontalAlignment=HorizontalAlignment.Stretch };
-        theme.SelectionChanged+=(_,_)=>SetTheme(theme.SelectedIndex==1?"light":theme.SelectedIndex==2?"contrast":"dark"); _inspector.Children.Add(theme);
-        var renderer=new ComboBox { Header="Rendering backend",ItemsSource=Enum.GetValues<ChartRenderingMode>(),SelectedItem=Chart.RenderingMode,HorizontalAlignment=HorizontalAlignment.Stretch };
-        renderer.SelectionChanged+=(_,_)=> { if(renderer.SelectedItem is ChartRenderingMode mode) Chart.RenderingMode=mode; }; _inspector.Children.Add(renderer);
-        Check("Grid",d.ShowGrid,v=>d.ShowGrid=v); Check("Legend",d.ShowLegend,v=>d.ShowLegend=v);
-        if(d.View is ChartView.ThreeD or ChartView.Pie3D) Check("Orthographic projection",d.Camera.Orthographic,v=>d.Camera.Orthographic=v);
-        var axisSelector=new ComboBox { Header="Axis",ItemsSource=d.XAxes.Concat(d.YAxes).Append(d.ZAxis).ToArray(),DisplayMemberPath=nameof(Axis.Title),SelectedItem=d.XAxis,HorizontalAlignment=HorizontalAlignment.Stretch };
-        var min=new NumberBox { Header="Minimum",Value=d.XAxis.Range.Minimum }; var max=new NumberBox { Header="Maximum",Value=d.XAxis.Range.Maximum };
-        axisSelector.SelectionChanged+=(_,_)=> { if(axisSelector.SelectedItem is Axis a) { min.Value=a.Range.Minimum; max.Value=a.Range.Maximum; } };
-        _inspector.Children.Add(axisSelector); _inspector.Children.Add(min); _inspector.Children.Add(max);
-        _inspector.Children.Add(Button("Apply range",()=>Execute(()=> { if(axisSelector.SelectedItem is Axis a) a.Range=new AxisRange(min.Value,max.Value); })));
-        _inspector.Children.Add(new Border { Height=1,Background=Brush("373D46"),Margin=new Thickness(0,4,0,4) });
-        _inspector.Children.Add(Label("SERIES",11));
-        foreach(var s in d.Series)
-        {
-            if(s is HeatmapSeries heat) _inspector.Children.Add(new IntensityScaleEditor { Series=heat });
-            Check(s.Title,s.Visible,v=>s.Visible=v);
-            var width=new Slider { Minimum=0,Maximum=6,StepFrequency=.25,Value=s.StrokeWidth,Header="Stroke width" }; width.ValueChanged+=(_,_)=>s.StrokeWidth=width.Value; _inspector.Children.Add(width);
-            if(s is LineSeries line)
-            {
-                var marker=new ComboBox { Header="Marker",ItemsSource=Enum.GetValues<MarkerShape>(),SelectedItem=line.Marker,HorizontalAlignment=HorizontalAlignment.Stretch };
-                marker.SelectionChanged+=(_,_)=> { if(marker.SelectedItem is MarkerShape m) line.Marker=m; }; _inspector.Children.Add(marker);
-            }
-        }
-        foreach(var control in _inspector.Children.OfType<Control>())
-        {
-            control.FontSize=12; control.MinHeight=28;
-            if(control is TextBox box) box.Padding=new Thickness(7,3,7,3);
-        }
-        FilterProperties();
-        void Check(string text,bool initial,Action<bool> changed)
-        {
-            var c=new CheckBox { Content=text,IsChecked=initial }; c.Checked+=(_,_)=>changed(true); c.Unchecked+=(_,_)=>changed(false); _inspector.Children.Add(c);
-        }
     }
     public void SetTheme(string name)=>Document.Theme=name switch { "light"=>ChartTheme.Light,"contrast"=>ChartTheme.HighContrast,"dark"=>ChartTheme.Dark,_=>throw new ArgumentException("Unknown theme.") };
     public void SetStreaming(bool enabled)

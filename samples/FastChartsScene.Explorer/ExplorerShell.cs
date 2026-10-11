@@ -22,8 +22,8 @@ public sealed partial class ExplorerPage
     private readonly TextBlock _exampleTitle = new() { FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
     private readonly TextBlock _exampleSummary = new() { FontSize = 11, Opacity = .75, TextTrimming = TextTrimming.CharacterEllipsis };
     private readonly StackPanel _exampleTags = new() { Orientation = Orientation.Horizontal, Spacing = 5 };
-    private readonly TextBox _propertySearch = new() { PlaceholderText = "Search properties", FontSize = 12, Margin = new Thickness(0, 0, 0, 6) };
-    private readonly Button _star = new() { Content = "☆", FontSize = 22, Padding = new Thickness(8, 1, 8, 1), Foreground = Brush("E5BF00") };
+    private readonly TextBox _propertySearch = new() { PlaceholderText = "Search properties", MaxLength = 512, FontSize = 12, Margin = new Thickness(0, 0, 0, 6) };
+    private readonly Button _star = new() { Content = new SymbolIcon(Symbol.OutlineStar), FontSize = 22, Padding = new Thickness(8, 1, 8, 1), Foreground = Brush("E5BF00") };
     private ScrollViewer _toolbarScroll = null!;
     private ScrollViewer _inspectorScroll = null!;
     private Grid _brand = null!;
@@ -127,7 +127,7 @@ public sealed partial class ExplorerPage
     {
         _exampleTitle.Text = Current.Title; _exampleSummary.Text = Current.Description;
         _exampleTags.Children.Clear(); _star.IsEnabled = Current.Id != "document";
-        _star.Content = _star.IsEnabled && _catalog.IsFavorite(Current.Id) ? "★" : "☆";
+        _star.Content = new SymbolIcon(_star.IsEnabled && _catalog.IsFavorite(Current.Id) ? Symbol.SolidStar : Symbol.OutlineStar);
         if (Current.Id == "document") return;
         foreach (var tag in _catalog.Find(Current.Id).Tags)
         {
@@ -140,16 +140,7 @@ public sealed partial class ExplorerPage
         if (visible) { SetStreaming(false); _gallery.Visibility = Visibility.Visible; _gallery.RefreshPreviews(); _gallery.FocusSearch(); }
         else { _gallery.Visibility = Visibility.Collapsed; _gallery.SuspendPreviews(); SaveGallerySettings(); }
     }
-    private void FilterProperties()
-    {
-        var query = _propertySearch.Text.Trim();
-        foreach (var item in _inspector.Children.OfType<FrameworkElement>())
-        {
-            if (ReferenceEquals(item, _propertySearch) || item is TextBlock) continue;
-            var text = item switch { TextBox box => box.Header?.ToString(), ComboBox box => box.Header?.ToString(), NumberBox box => box.Header?.ToString(), Slider slider => slider.Header?.ToString(), CheckBox box => box.Content?.ToString(), Button button => button.Content?.ToString(), IntensityScaleEditor => "Intensity palette color range scale missing value custom", _ => "" };
-            item.Visibility = query.Length == 0 || (text ?? "").Contains(query, StringComparison.OrdinalIgnoreCase) ? Visibility.Visible : Visibility.Collapsed;
-        }
-    }
+    private void FilterProperties() => _propertyGrid.Filter = _propertySearch.Text;
     private void SaveGallerySettings()
     {
         if (_restoringGallerySettings) return;
