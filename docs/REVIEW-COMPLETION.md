@@ -18,6 +18,14 @@ Surface, waterfall, spatial bar, point/line and mesh geometry now uses each seri
 
 Eight box corners now use stack storage, face indices use static read-only span data, and tube ring trigonometry is computed once instead of for every segment. No hardware speedup is inferred from these implementation changes.
 
+## Spectrogram integration and scratch-buffer reuse
+
+Reviewing all example screenshots exposed a spectrogram that was nearly uniform blue. `Fourier.Spectrogram` already returns frequency-major decibels, but the example transposed the result and applied another logarithm. The example now uses the returned values unchanged and displays a declared -100 to 0 dB color calibration. Its subtitle defines unit peak amplitude as 0 dB and its X axis explicitly names window-start times.
+
+The reusable STFT now allocates one FFT scratch array and one Hann-weight array per call rather than constructing a new spectrum, frequency array and amplitude array for every window. The complete frequency-major output is checked against independently invoking `Spectrum` on each window. Tests cover a known tone's frequency and amplitude, the synthetic chirp's changing frequency ridge, silence at the -240 dB floor, invalid rates/window enums and a bounded allocation budget. Nonfinite samples in an unused incomplete tail are rejected consistently with the finite-input contract.
+
+The CPU benchmark now reports both per-window-spectrum and reused-scratch STFT strategies on the same input, after exact output comparison. It is an isolated CPU measurement, not a GPU/FPS benchmark. Browser regressions check the known chirp ridge values and a visible high-amplitude ridge pixel on each rendering backend.
+
 ## Browser and regression evidence
 
 `CompletionReviewTests` covers data/geometry correctness and bounded gap-index allocations. `rendering-review-tests.mjs` runs against both the real WebGL and explicit Skia/raster backends at DPR 2 through the existing browser harness. It compares actual plot pixels for equivalent primary/secondary bindings, checks visible 3D grid/stroke changes, and confirms long-gap JSON samples survive rendering unchanged. Tests wait for a newly presented frame rather than assuming a changed model is already visible.

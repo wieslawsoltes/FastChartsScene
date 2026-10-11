@@ -23,6 +23,21 @@ export async function validateRenderingReview(page,inspect,scenario){
   assert(clip.width>20&&clip.height>20);
   return PNG.sync.read(await page.screenshot({clip,scale:'css'}));
  }
+ await scenario('review: spectrogram displays calibrated chirp ridges instead of double-logged data',async()=>{
+  await select('spectrogram');const d=await save(),g=d.series[0].grid,s=await inspect();
+  assert.deepEqual(d.series[0].colorScale.range,[-100,0]);
+  for(const col of [0,30,60,90,g.columns-1]){
+   let peak=0;for(let row=1;row<g.rows;row++)if(g.values[row*g.columns+col]>g.values[peak*g.columns+col])peak=row;
+   const expected=25+28*(col*64/1024+255/2048);assert(Math.abs(peak*4-expected)<=8);assert(g.values[peak*g.columns+col]>-6);
+  }
+  await page.mouse.move(2,2);await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
+  const png=PNG.sync.read(await page.screenshot({scale:'css'})),col=60;
+  let peak=0;for(let row=1;row<g.rows;row++)if(g.values[row*g.columns+col]>g.values[peak*g.columns+col])peak=row;
+  const x=Math.floor(s.bounds.x+s.plot.x+col/(g.columns-1)*s.plot.width);
+  const y=Math.floor(s.bounds.y+s.plot.y+(1-peak/(g.rows-1))*s.plot.height);
+  const offset=(y*png.width+x)*4;assert(png.data[offset]>100,'Expected a visible high-amplitude ridge, not the low-value background');
+  return {columns:g.columns,frequencyBins:g.rows,peakHertz:peak*4,peakDecibels:g.values[peak*g.columns+col]};
+ });
  for(const id of ['surface','waterfall','bars3d','helix','mesh'])await scenario('review: '+id+' secondary axes preserve exact plot pixels',async()=>{
   await select(id);const d=await save(),before=await inspect(),reference=await pixels();
   const x={...d.xAxes[0],id:'review-x'},y={...d.yAxes[0],id:'review-y'};
