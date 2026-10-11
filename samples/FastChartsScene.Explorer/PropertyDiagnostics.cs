@@ -38,6 +38,15 @@ public static partial class BrowserBridge
 #if __WASM__
     [JSExport]
 #endif
+    public static string PropertyViewportBounds(string category, string name)
+    {
+        for (var node = VisualTreeHelper.GetParent(PropertyElement(category, name)); node != null; node = VisualTreeHelper.GetParent(node))
+            if (node is ScrollViewer viewport) return Bounds(viewport);
+        throw new InvalidOperationException("Property editor has no scrolling viewport.");
+    }
+#if __WASM__
+    [JSExport]
+#endif
     public static string PropertyOptionBounds(string category, string name, int index)
     {
         if (PropertyElement(category, name) is not ComboBox { IsDropDownOpen: true } combo || index < 0 || index >= combo.Items.Count || combo.ContainerFromIndex(index) is not FrameworkElement item) return "";
