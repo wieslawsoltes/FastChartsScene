@@ -4,12 +4,14 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
+import { validateCompactActions } from './responsive-tests.mjs';
 
 const fallback=process.env.RENDER_MODE==='Skia';
 const suite=fallback?'Skia fallback':'WebGL GPU';
 const root=resolve(process.env.SITE_ROOT??'../../artifacts/site');
 const output=resolve(process.env.TEST_OUTPUT??(fallback?'../../artifacts/fallback-results':'../../artifacts/browser-results'));
 await mkdir(output,{recursive:true});
+process.env.COMPACT_INSPECTOR_SCREENSHOT=resolve(output,'mobile-inspector.png');
 const mime={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.json':'application/json','.wasm':'application/wasm','.css':'text/css','.woff2':'font/woff2','.png':'image/png','.svg':'image/svg+xml'};
 const server=createServer(async(req,res)=>{
  try{
@@ -142,6 +144,7 @@ try{
   await select('signals');await page.setViewportSize({width:760,height:820});await waitFor(s=>s.bounds.width>300&&s.bounds.width<760,'tablet layout');await image('tablet');
   await page.setViewportSize({width:480,height:800});await waitFor(s=>s.bounds.width>350&&s.bounds.width<=480,'mobile layout');await image('mobile');
  });
+ await validateCompactActions(page,inspect,scenario,image);
  assert.equal(pageErrors.length,0,'Unhandled page errors: '+pageErrors.join('\n'));await context.close();
 }catch(error){process.exitCode=1;console.error(error.stack??error);if(!results.some(r=>!r.passed))results.push({name:'initialization or teardown',passed:false,error:String(error)});
  if(page&&!page.isClosed()){await page.screenshot({path:resolve(output,'failure.png')}).catch(()=>{});console.error('STATE',await inspect().catch(e=>String(e)));}

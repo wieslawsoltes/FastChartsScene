@@ -11,7 +11,8 @@ public sealed partial class App : Application
     }
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        MainWindow=new Window { Title="FastChartsScene — Scientific Chart Explorer",Content=new ExplorerPage() };
+        var explorer=new ExplorerPage(); explorer.InitializeResponsiveLayout();
+        MainWindow=new Window { Title="FastChartsScene — Scientific Chart Explorer",Content=explorer };
         MainWindow.Activate();
     }
 }
