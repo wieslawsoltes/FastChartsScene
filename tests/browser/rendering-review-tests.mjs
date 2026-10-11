@@ -1,3 +1,4 @@
+import {validateSampleCursors} from './sample-cursor-tests.mjs';
 import assert from 'node:assert/strict';
 import {PNG} from 'pngjs';
 
@@ -72,4 +73,5 @@ export async function validateRenderingReview(page,inspect,scenario){
   assert.deepEqual((await save()).series[0].data.y,y,'Rendering must not rewrite missing samples');
   return {sourcePoints:state.sourcePoints,vertices:state.vertices};
  });
+ await validateSampleCursors(page,inspect,scenario);
 }
