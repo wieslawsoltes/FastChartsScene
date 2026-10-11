@@ -92,7 +92,7 @@ public sealed class ErrorBarSeries : DataSeries
     }
 }
 
-public sealed class ScalarGrid
+public sealed partial class ScalarGrid
 {
     private readonly double[] _values;
     public int Columns { get; }
@@ -113,12 +113,12 @@ public sealed class ScalarGrid
         ValueRange=double.IsFinite(min)?(min,max):(0,1);
     }
     public double this[int column,int row] { get { if((uint)column>=(uint)Columns||(uint)row>=(uint)Rows) throw new ArgumentOutOfRangeException(nameof(column)); return _values[row*Columns+column]; } }
-    public double X(int column)=>Columns==1?(XMinimum+XMaximum)/2:XMinimum+(XMaximum-XMinimum)*column/(Columns-1);
-    public double Y(int row)=>Rows==1?(YMinimum+YMaximum)/2:YMinimum+(YMaximum-YMinimum)*row/(Rows-1);
+    public double X(int column)=>Coordinate(XMinimum,XMaximum,column,Columns);
+    public double Y(int row)=>Coordinate(YMinimum,YMaximum,row,Rows);
     public double Normalized(double value)=>ValueRange.Maximum==ValueRange.Minimum?0.5:(value-ValueRange.Minimum)/(ValueRange.Maximum-ValueRange.Minimum);
 }
 
-public class HeatmapSeries : Series
+public partial class HeatmapSeries : Series
 {
     private ScalarGrid _grid=new(1,1,0,1,0,1,[0]);
     public ScalarGrid Grid { get=>_grid; set { ArgumentNullException.ThrowIfNull(value); Set(ref _grid,value); } }
