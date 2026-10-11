@@ -80,7 +80,7 @@ public sealed class ChartControl : UserControl,IDisposable
     {
         _attached=false; if(Document is { } d) d.Changed-=OnModelChanged;
         if(_observedRoot!=null) _observedRoot.Changed-=RootChanged; _observedRoot=null;
-        Cancel(); _overlay.Reset(); _compiler.ClearCache();
+        Cancel(); _overlay.Cursor=null; _overlay.Hit=null; SetScalarHit(null); _overlay.Reset(); _compiler.ClearCache();
     }
     private void RootChanged(XamlRoot sender,XamlRootChangedEventArgs args)=>RequestDraw();
     private void OnModelChanged(object? sender,EventArgs e)=>RequestDraw();

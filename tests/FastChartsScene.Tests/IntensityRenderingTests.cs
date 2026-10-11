@@ -34,6 +34,23 @@ internal static partial class Program
             True(after.Metadata.Labels.Any(l => l.Text == "Power") && after.Metadata.Labels.Any(l => l.Text == "mW"));
             True(after.Metadata.Labels.Any(l => l.X > after.Layout.Plot.Right && l.Text == "10"));
         });
+        Add("stacked far-axis labels stay outside the colorbar gutter", () => {
+            using var d = IntensityDocument(); d.AxisLayout = AxisLayout.Stacked; d.YAxis.Side = AxisSide.Far;
+            var heat = (HeatmapSeries)d.Series[0]; heat.ShowColorBar = true;
+            var frame = new SceneCompiler().Compile(d, 800, 600); var bar = frame.Layout.ColorBars[heat.Id];
+            True(bar.Region.X - frame.Layout.Plot.Right > 60);
+        });
+        Add("colorbar strips produce the same palette pixels as scalar cells", () => {
+            using var d = IntensityDocument(); var heat = (HeatmapSeries)d.Series[0]; heat.ShowColorBar = true;
+            heat.ColorScale = new(ColorMap.Grayscale.WithInterpolation(ColorInterpolation.Stepped), new(0, 10));
+            var frame = new SceneCompiler().Compile(d, 800, 600); var strip = frame.Layout.ColorBars[heat.Id].Strip;
+            var image = RasterFrameRenderer.Render(frame, 800, 600);
+            var at = ((int)(strip.Y + strip.Height * .3) * 800 + (int)(strip.X + strip.Width / 2)) * 4;
+            Equal(0, image.Pixels.Span[at]); Equal(0, image.Pixels.Span[at + 1]); Equal(0, image.Pixels.Span[at + 2]);
+            heat.ColorScale = heat.ColorScale.WithPalette(ColorMap.Grayscale);
+            frame = new SceneCompiler().Compile(d, 800, 600); image = RasterFrameRenderer.Render(frame, 800, 600);
+            True(image.Pixels.Span[at] > 170 && image.Pixels.Span[at] < 188);
+        });
         Add("colorbar changes invalidate frames and hidden series release the gutter", () => {
             using var d = IntensityDocument(); var heat = (HeatmapSeries)d.Series[0]; heat.ShowColorBar = true; var compiler = new SceneCompiler();
             var first = compiler.Compile(d, 800, 600); heat.ColorScale = new(ColorMap.Thermal);

@@ -58,5 +58,5 @@ internal sealed partial class ChartOverlay : SKCanvasElement,IDisposable
     }
     public byte[] ExportPng(double scale=1)=>_renderer.ExportPng(Frame??throw new InvalidOperationException("No chart frame."),scale);
     public void Reset()=>_renderer.Reset();
-    public void Dispose() { _renderer.Dispose(); _paint.Dispose(); }
+    public new void Dispose() { _renderer.Dispose(); _paint.Dispose(); }
 }

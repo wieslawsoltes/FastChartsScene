@@ -28,6 +28,18 @@ SceneCompiler caches a frame by document identity/revision and logical viewport 
 
 The compiler renders XY, circular and spatial families explicitly. Unsupported view/series/style combinations throw a descriptive exception. Original-sample hit testing queries the data source, not interpolated or decimated vertices.
 
+## Scalar color mapping and picking
+
+`ColorMap` owns 2–256 ordered stops and exposes a read-only view. `ColorScale` owns immutable palette/range/domain/visibility settings; `ResolvedColorScale` performs stable linear/log transforms and labels. Heatmap-derived models cache resolution by immutable grid/settings identity. Automatic logarithmic ranges consider only finite positive values; empty and constant grids do not invent extrema.
+
+`ScalarGrid.CellBounds` and `IntensityGeometry.TryCellBounds` define a shared sample-centered projection contract. Cell bounds are intersected with the data-axis ranges before logarithmic transformation, retaining visible portions of cells whose centers are outside the log domain. The scene compiler and `ChartInteraction.HitTestScalar` share that geometry. Picking walks regular heatmaps in reverse draw order and passes through fully transparent cells. It returns the original sample value/coordinates and the visible cell bounds; no decimated or interpolated value is invented.
+
+ChartLayout reserves a gutter for visible requested colorbars and subdivides it per pane/series. Colorbar colors use the same resolved scale. Gradient bars use at most 128 uniform subdivisions plus explicit palette stops, while stepped boundaries remain exact. Labels, bars, heatmaps and cursor behavior are common to GPU and fallback paths. PNG and SVG include the colorbars; grid CSV exports mapped base colors.
+
+`IntensityScaleEditor` is a standalone Uno UserControl with a bindable Series property. It detaches model subscriptions on unload and validates an entire candidate setting before replacing the immutable scale. The explorer adds it for scalar-grid series. JSON persists complete normalized stops and all scalar settings through bounded manual serialization; optional missing fields retain legacy defaults.
+
+3D surfaces/tubes map vertex colors, not per-fragment scalar values; the distinction matters for nonlinear/stepped palettes. This remains a stated boundary rather than an unimplemented feature advertised as complete.
+
 ## GPU hosts
 
 Desktop uses Uno GLCanvasElement with Silk.NET. The renderer saves and restores changed shared-context state, validates shader/program creation and draws clipped triangles with depth testing and simple face lighting. A valid initial backing size avoids zero-sized initialization; subsequent backing dimensions use device pixels.

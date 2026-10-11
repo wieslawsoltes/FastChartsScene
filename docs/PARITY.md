@@ -9,17 +9,17 @@ This is an implementation inventory, not a claim of full LightningChart .NET par
 | Data | Immutable sources, synchronized rolling snapshots, ordered searches, interpolation, extrema/gap-preserving screen reduction | Incremental GPU uploads, zero-copy source APIs, additional retention modes and sustained-load guarantees |
 | Bars/ranges | Positive/negative stacks, groups, horizontal bars, bands, asymmetric errors; atomic fit includes totals, widths and uncertainty | All grouping/range styles, per-series editing and original APIs |
 | Financial | Candlestick/OHLC; SMA/EMA/RSI/Bollinger calculations; all-series data export | Full financial tools/indicators, market calendars, finance-specific picking/editing |
-| Intensity | Regular heatmaps and contours with NaN holes | Colorbars, palette controls, GPU scalar textures, irregular grids, intensity picking/editing |
+| Intensity | Regular heatmaps/contours, immutable custom gradient/stepped palettes, linear/log automatic or manual color ranges, reversal, missing/outlier colors, pane-aware colorbars, reusable Uno editor, exact regular heatmap cell picking, persisted settings | GPU scalar textures, bilinear/per-fragment scalar mapping, irregular grids, contour/spatial picking and data editing; complete original palette/colorbar API |
 | Polar/Smith | Linear unfilled curves and graticules | All series styles, annotations, clipping and navigation compatibility |
 | 3D | Lit surfaces, waterfalls, bars, points/lines, meshes/OBJ; correct spatial fit; depth-correct CPU fallback and PNG | Volume rendering, complete spatial families, translucent sorting, spatial picking/slicing, full axes/annotations |
 | Pie | Extruded pie/doughnut, height, explosion, JSON/CSV/PNG | Slice labels/legends, complete picking/layout/style behavior |
 | DSP | FFT/inverse, windows, calibrated spectra, STFT, basic low-pass and indicators | Streaming transforms, full filters and DSP API |
-| Input | Anchored zoom, pan/orbit, rectangle zoom, XY sample queries, legend toggles, undo/redo, pinch adapter | Picking/editing for every series, additional tools, complete touch/pen/accessibility matrix |
+| Input | Anchored zoom, pan/orbit, rectangle zoom, XY sample queries and regular heatmap cell queries, legend toggles, undo/redo, pinch adapter | Picking/editing for every series, additional tools, complete touch/pen/accessibility matrix |
 | Annotations | XY text, horizontal/vertical lines and rectangles | Interactive editing, complete annotation set, circular/spatial annotations |
 | Persistence | Versioned bounded JSON for every current model; exact data/style roundtrip, duplicate-key checks | LightningChart file compatibility, stable external series IDs, future-version migrations |
 | Export | 2D/3D PNG, clipped 2D SVG, first-series and complete-model CSV, chart JSON, frame metadata | 3D vector formats, PDF/document/print/clipboard integration and original export API |
 | Rendering | Packed common geometry, native GL, browser-owned WebGL2/RGBA composition, Skia vectors/text and CPU depth renderer | Zero-copy GPU composition, WebGPU/Vulkan/D3D/Metal backends, device-loss recovery, AA/style and cross-device conformance |
-| Explorer | 29 fixtures, searchable gallery, inspector, synthetic acquisition, document and export commands | Exact reference application visual comparison, all original explorer examples/features |
+| Explorer | 31 fixtures, searchable gallery, inspector and reusable intensity editor, synthetic acquisition, document and export commands | Exact reference application visual comparison, all original explorer examples/features |
 | Packaging | Twelve reusable libraries, implementation inventory and isolated desktop/browser NuGet consumer | Public-feed releases, expanded API stability/compatibility testing |
 | Deployment | Desktop/browser builds and validated-artifact Pages workflow | Confirm each deployment independently; native runtime/hardware acceptance |
 
@@ -34,6 +34,14 @@ OpenGL/WebGL geometry is GPU-rendered but read back before Uno composition. The 
 Frame buffers are exposed to backend consumers and must be treated as immutable. The model/compiler/controller contract is UI-thread-affine. JSON preserves the current model but regenerates transient series IDs. All series CSV is a long-form interchange representation, not an original-product format.
 
 Browser tests exercise real pointers/keys and toolbar commands plus diagnostic exports for fixture selection, state assertions and persistence. They do not yet certify all native file-picker, touch/pen, screen-reader, or cross-browser behavior. Desktop CI compilation is not native runtime testing.
+
+## Intensity increment boundaries
+
+See [INTENSITY.md](INTENSITY.md) for the public contract. Heatmaps remain sample-centered, flat-color cells rather than interpolated scalar textures. Regular heatmap cursor values are exact stored samples, not fabricated interpolation. Contour and 3D picking/editing are not included. Colorbars are vertical and occupy a right-hand gutter; overlapping series share the gutter by stacking their bars.
+
+For surfaces and waterfall tubes, the color scale maps sample vertices/endpoints and the renderer interpolates those colors, with lighting applied. This is not evaluation of a nonlinear or stepped transfer function at each fragment. Spatial bars use their sample's base color. The colorbar displays unlit scale colors. Fully transparent fragments no longer write depth, but arbitrary translucent depth ordering remains unresolved.
+
+Color scale/colorbar fields are additive to the version-1 saved document. Older files without them remain readable with the original heat palette and hidden colorbar. An older application may ignore the new fields; forward compatibility is not promised. The new editor validates candidate palettes/ranges before applying them, and the current package-only consumer compiles the editor and scalar query APIs.
 
 ## Acceptance criteria for full parity
 

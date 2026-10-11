@@ -142,6 +142,8 @@ try{
  await validateIntensity(page,{inspect,select,scenario,output});
  await context.close();context=await open(2);
  for(const id of ['signals','heatmap','surface'])await scenario('DPR 2: '+id,async()=>{await select(id);return image('dpr2-'+id);});
+ const intensityDpr2=resolve(output,'dpr2-intensity');await mkdir(intensityDpr2,{recursive:true});
+ await validateIntensity(page,{inspect,select,scenario:(name,run)=>scenario('DPR 2: '+name,run),output:intensityDpr2});
  await scenario('tablet and mobile layout',async()=>{
   await select('signals');await page.setViewportSize({width:760,height:820});await waitFor(s=>s.bounds.width>300&&s.bounds.width<760,'tablet layout');await image('tablet');
   await page.setViewportSize({width:480,height:800});await waitFor(s=>s.bounds.width>350&&s.bounds.width<=480,'mobile layout');await image('mobile');

@@ -65,7 +65,7 @@ public sealed class ChartLayout
         if (errors.Count != 0) throw new InvalidOperationException(string.Join("\n", errors));
         var layered = document.AxisLayout == AxisLayout.Layered && document.View == ChartView.XY;
         var near = layered ? Math.Max(1, document.YAxes.Count(a => a.Side == AxisSide.Near)) : 1;
-        var far = layered ? document.YAxes.Count(a => a.Side == AxisSide.Far) : 0;
+        var far = document.View == ChartView.XY ? (layered ? document.YAxes.Count(a => a.Side == AxisSide.Far) : document.YAxes.Any(a => a.Side == AxisSide.Far) ? 1 : 0) : 0;
         var left = 72 + Math.Max(0, near - 1) * 52;
         var right = 24 + far * 52;
         var top = document.Subtitle.Length == 0 ? 55 : 74;

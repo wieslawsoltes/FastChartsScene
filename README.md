@@ -6,7 +6,7 @@ Independent scientific charting components for .NET 10 and Uno Platform, with a 
 
 ## Application
 
-The explorer contains 29 deterministic chart fixtures: multichannel/live signals, one million samples, scatter, monotone cubic/step/area curves, bands, error bars, positive/negative and horizontal stacks, candlestick/OHLC, heatmaps, contours, FFT spectra, spectrograms, polar/Smith plots, stacked/segmented axes, logarithmic/date axes, surfaces, waterfalls, spatial bars/lines/meshes, pies, and doughnuts.
+The explorer contains 31 deterministic chart fixtures: multichannel/live signals, one million samples, scatter, monotone cubic/step/area curves, bands, error bars, positive/negative and horizontal stacks, candlestick/OHLC, heatmaps, logarithmic intensity, compared intensity panes, contours, FFT spectra, spectrograms, polar/Smith plots, stacked/segmented axes, logarithmic/date axes, surfaces, waterfalls, spatial bars/lines/meshes, pies, and doughnuts.
 
 A searchable gallery, property inspector, original-data preview, chart-document open/save, bounded synthetic acquisition, legend visibility, pan/orbit, anchored wheel/pinch zoom, rectangle zoom, and viewport undo/redo are included. Unsupported combinations are diagnosed rather than silently substituted.
 
@@ -21,19 +21,38 @@ A searchable gallery, property inspector, original-data preview, chart-document 
 | Save chart / Open chart | Versioned JSON document with all current data, styles, axes, annotations, and camera settings |
 | Frame JSON | Render metadata for diagnostics; this is not a complete saved chart |
 
+## Intensity charts
+
+Intensity heatmaps, contours, surfaces, waterfalls and spatial bars share reusable immutable color scales. Choose gradient or stepped palettes, reverse them, use automatic/manual linear or logarithmic color ranges, and display pane-aware colorbars. Regular XY heatmaps support exact stored-cell cursor values and highlighting. The inspector uses the separately reusable `IntensityScaleEditor` control, including custom palette stops and inline validation.
+
+```csharp
+var scale = new ColorScale(ColorMap.Thermal,
+    range: new AxisRange(0.001, 1000), mode: ColorScaleMode.Logarithmic);
+var heat = new HeatmapSeries
+{
+    Grid = new ScalarGrid(2, 2, 0, 10, 0, 10, [0.001, 1, 10, 1000]),
+    ColorScale = scale, ShowColorBar = true,
+    ValueTitle = "Power", ValueUnits = "mW"
+};
+document.Series.Add(heat);
+var editor = new IntensityScaleEditor { Series = heat };
+```
+
+The same immutable scale can be assigned to several series for calibrated comparisons. NaN/log-domain gaps, out-of-range transparency, empty/constant datasets, saved-document compatibility and 3D vertex-color boundaries are detailed in [the intensity API guide](docs/INTENSITY.md). This is an independently designed API, not LightningChart source/binary compatibility.
+
 ## Reusable packages
 
 | Package | Responsibility |
 | --- | --- |
-| `FastChartsScene.Core` | Coordinates, validated ranges, linear/log/date/category axes, calendar ticks, themes, observable primitives |
+| `FastChartsScene.Core` | Coordinates, validated ranges, linear/log/date/category axes, calendar ticks, themes, immutable scalar color scales and maps, observable primitives |
 | `FastChartsScene.Data` | Immutable XY/uniform sources, synchronized rolling buffers, searches, interpolation, spike/gap-preserving envelope reduction, CSV |
 | `FastChartsScene.SignalProcessing` | FFT/inverse, calibrated spectra, STFT, windows, filtering, SMA/EMA/RSI/Bollinger calculations |
 | `FastChartsScene.Charts` | Typed documents/series, cameras, annotations, atomic stack-aware/spatial AutoFit, geometry algorithms |
-| `FastChartsScene.Rendering` | Adaptive axis layout, backend-neutral clipped geometry, labels, hit regions, revision caching |
-| `FastChartsScene.Interaction` | Zoom, pan/orbit, rectangle selection, gesture history, original-sample hit testing |
+| `FastChartsScene.Rendering` | Adaptive axis layout, backend-neutral clipped geometry, labels, pane-aware colorbars, hit regions, revision caching |
+| `FastChartsScene.Interaction` | Zoom, pan/orbit, rectangle selection, gesture history, original-sample and exact regular-heatmap cell hit testing |
 | `FastChartsScene.Rendering.Raster` | Depth-tested CPU rendering with homogeneous clipping, perspective-correct color, scissoring, top-left coverage, alpha blending |
 | `FastChartsScene.Rendering.Skia` | 2D vector rendering, text, 3D raster composition, PNG export |
-| `FastChartsScene.Controls.Uno` | Reusable Uno control, native OpenGL/browser WebGL2 hosts, input and lifecycle adapters, explicit fallback |
+| `FastChartsScene.Controls.Uno` | Reusable Uno control, native OpenGL/browser WebGL2 hosts, input and lifecycle adapters, explicit fallback, bindable intensity scale editor |
 | `FastChartsScene.Examples` | Standalone deterministic chart fixtures |
 | `FastChartsScene.Serialization` | Bounded, versioned, reflection-free JSON persistence |
 | `FastChartsScene.Export` | Streaming all-series CSV and clipped 2D SVG writers |
