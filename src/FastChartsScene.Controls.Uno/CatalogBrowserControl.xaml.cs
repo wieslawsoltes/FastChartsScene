@@ -22,7 +22,8 @@ public sealed class CatalogCard(CatalogEntry entry) : INotifyPropertyChanged
     public ImageSource? Preview { get => _preview; internal set { _preview = value; Changed(nameof(Preview)); } }
     public string PreviewMessage { get => _previewMessage; internal set { _previewMessage = value; Changed(nameof(PreviewMessage)); } }
     public string FavoriteGlyph => _favorite ? "★" : "☆";
-    internal void SetFavorite(bool value) { if (_favorite == value) return; _favorite = value; Changed(nameof(FavoriteGlyph)); }
+    public Symbol FavoriteSymbol => _favorite ? Symbol.SolidStar : Symbol.OutlineStar;
+    internal void SetFavorite(bool value) { if (_favorite == value) return; _favorite = value; Changed(nameof(FavoriteGlyph)); Changed(nameof(FavoriteSymbol)); }
     public event PropertyChangedEventHandler? PropertyChanged;
     private void Changed(string property) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
 }
@@ -145,7 +146,7 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
         SelectedTitle.Text = entry?.Title ?? "No example selected"; SelectedCategory.Text = entry?.Category ?? "";
         SelectedDescription.Text = entry?.Description ?? "Change the search or filters to see examples.";
         SelectedImage.Source = entry == null ? null : _cards[entry.Id].Preview;
-        FavoriteSelected.Content = entry != null && _model!.IsFavorite(entry.Id) ? "★" : "☆";
+        FavoriteSelectedIcon.Symbol = entry != null && _model!.IsFavorite(entry.Id) ? Symbol.SolidStar : Symbol.OutlineStar;
         Open.IsEnabled = FavoriteSelected.IsEnabled = entry != null; SelectedTags.Children.Clear();
         if (entry != null)
         {

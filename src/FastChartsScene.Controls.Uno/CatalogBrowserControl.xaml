@@ -14,7 +14,7 @@
                         <Image Source="{x:Bind Preview, Mode=OneWay}" Stretch="Uniform"/>
                     </Grid>
                 </Border>
-                <Button Content="{x:Bind FavoriteGlyph, Mode=OneWay}" Tag="{x:Bind Id}" Click="FavoriteClicked" AutomationProperties.Name="Toggle example favorite" ToolTipService.ToolTip="Add or remove favorite" HorizontalAlignment="Right" VerticalAlignment="Top" Padding="6,1" MinWidth="28" MinHeight="24" Foreground="#F2CC00" Background="#CC303030"/>
+                <Button Tag="{x:Bind Id}" Click="FavoriteClicked" AutomationProperties.Name="Toggle example favorite" ToolTipService.ToolTip="Add or remove favorite" HorizontalAlignment="Right" VerticalAlignment="Top" Padding="6,1" MinWidth="28" MinHeight="24" Foreground="#F2CC00" Background="#CC303030"><SymbolIcon Symbol="{x:Bind FavoriteSymbol, Mode=OneWay}" Width="16" Height="16"/></Button>
                 <TextBlock Grid.Row="1" Text="{x:Bind Title}" Foreground="White" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis"/>
                 <TextBlock Grid.Row="2" Text="{x:Bind TagsText}" Foreground="#D6BC2C" FontSize="10" TextTrimming="CharacterEllipsis"/>
             </Grid>
@@ -28,7 +28,7 @@
                     <TextBlock Text="{x:Bind TagsText}" FontSize="10" Foreground="#D6BC2C" TextTrimming="CharacterEllipsis"/>
                     <TextBlock Text="{x:Bind Description}" FontSize="11" Foreground="#BDBDBD" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
-                <Button Grid.Column="2" Content="{x:Bind FavoriteGlyph, Mode=OneWay}" Tag="{x:Bind Id}" Click="FavoriteClicked" AutomationProperties.Name="Toggle example favorite" ToolTipService.ToolTip="Add or remove favorite" Foreground="#F2CC00" Padding="6,2" VerticalAlignment="Center"/>
+                <Button Grid.Column="2" Tag="{x:Bind Id}" Click="FavoriteClicked" AutomationProperties.Name="Toggle example favorite" ToolTipService.ToolTip="Add or remove favorite" Foreground="#F2CC00" Padding="6,2" VerticalAlignment="Center"><SymbolIcon Symbol="{x:Bind FavoriteSymbol, Mode=OneWay}" Width="16" Height="16"/></Button>
             </Grid>
         </DataTemplate>
     </UserControl.Resources>
@@ -75,7 +75,7 @@
             <TextBlock x:Name="ResultCount" VerticalAlignment="Center" FontSize="11" TextTrimming="CharacterEllipsis"/>
             <Button Grid.Column="1" Content="Export favorites" AutomationProperties.Name="Export favorites" Click="ExportFavoritesClicked" FontSize="11" Padding="8,4"/>
             <Button Grid.Column="2" Content="Import favorites" AutomationProperties.Name="Import favorites" Click="ImportFavoritesClicked" FontSize="11" Padding="8,4"/>
-            <Button Grid.Column="3" x:Name="FavoriteSelected" Content="☆" AutomationProperties.Name="Favorite selected example" Click="FavoriteSelectedClicked" Foreground="#F2CC00" FontSize="18" Padding="12,2"/>
+            <Button Grid.Column="3" x:Name="FavoriteSelected" AutomationProperties.Name="Favorite selected example" Click="FavoriteSelectedClicked" Foreground="#F2CC00" FontSize="18" Padding="12,2"><SymbolIcon x:Name="FavoriteSelectedIcon" Symbol="OutlineStar" Width="18" Height="18"/></Button>
             <Button Grid.Column="4" x:Name="Open" Content="Open example" AutomationProperties.Name="Open example" Click="OpenClicked" Background="#E5BF00" Foreground="#181818" FontWeight="SemiBold" Padding="18,7"/>
         </Grid>
     </Grid>
