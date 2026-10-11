@@ -2,8 +2,34 @@ using FastChartsScene.Core;
 
 namespace FastChartsScene.Charts;
 
+/// <summary>Exact finite and positive finite extents. Empty domains use NaN endpoints.</summary>
+public sealed record ScalarGridStatistics(int FiniteCount, double Minimum, double Maximum,
+    int PositiveCount, double PositiveMinimum, double PositiveMaximum);
+
 public sealed partial class ScalarGrid
 {
+    private ScalarGridStatistics? _statistics;
+    /// <summary>One immutable statistics object shared across all palettes/series bound to this grid.</summary>
+    public ScalarGridStatistics Statistics
+    {
+        get
+        {
+            if (Volatile.Read(ref _statistics) is { } cached) return cached;
+            var minimum = double.PositiveInfinity; var maximum = double.NegativeInfinity;
+            var positiveMinimum = double.PositiveInfinity; var positiveMaximum = double.NegativeInfinity;
+            var count = 0; var positives = 0;
+            foreach (var value in Values.Span)
+            {
+                if (!double.IsFinite(value)) continue;
+                count++; minimum = Math.Min(minimum, value); maximum = Math.Max(maximum, value);
+                if (value <= 0) continue;
+                positives++; positiveMinimum = Math.Min(positiveMinimum, value); positiveMaximum = Math.Max(positiveMaximum, value);
+            }
+            var result = new ScalarGridStatistics(count, count == 0 ? double.NaN : minimum, count == 0 ? double.NaN : maximum,
+                positives, positives == 0 ? double.NaN : positiveMinimum, positives == 0 ? double.NaN : positiveMaximum);
+            return Interlocked.CompareExchange(ref _statistics, result, null) ?? result;
+        }
+    }
     private static double Coordinate(double minimum, double maximum, int index, int count)
     {
         if ((uint)index >= (uint)count) throw new ArgumentOutOfRangeException(nameof(index));
@@ -53,14 +79,15 @@ public partial class HeatmapSeries
     public ResolvedColorScale ResolveColorScale()
     {
         if (ReferenceEquals(_resolvedGrid, Grid) && ReferenceEquals(_resolvedSettings, ColorScale)) return _resolved!;
-        var min = double.PositiveInfinity; var max = double.NegativeInfinity;
+        var min = double.NaN; var max = double.NaN;
         if (ColorScale.Range == null)
-            foreach (var value in Grid.Values.Span)
-            {
-                if (!double.IsFinite(value) || ColorScale.Mode == ColorScaleMode.Logarithmic && value <= 0) continue;
-                min = Math.Min(min, value); max = Math.Max(max, value);
-            }
-        _resolved = ColorScale.Resolve(double.IsFinite(min) ? min : double.NaN, double.IsFinite(max) ? max : double.NaN);
+        {
+            var statistics = Grid.Statistics;
+            var logarithmic = ColorScale.Mode == ColorScaleMode.Logarithmic;
+            min = logarithmic ? statistics.PositiveMinimum : statistics.Minimum;
+            max = logarithmic ? statistics.PositiveMaximum : statistics.Maximum;
+        }
+        _resolved = ColorScale.Resolve(min, max);
         _resolvedGrid = Grid; _resolvedSettings = ColorScale; return _resolved;
     }
 }

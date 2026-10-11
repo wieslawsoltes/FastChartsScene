@@ -16,6 +16,7 @@ public sealed partial class SceneCompiler
     public RenderFrame Compile(ChartDocument document, double width, double height)
     {
         ArgumentNullException.ThrowIfNull(document);
+        ObjectDisposedException.ThrowIf(document.IsDisposed, document);
         if (ReferenceEquals(document, _document) && _frame is { } cached && cached.Metadata.Revision == document.Revision &&
             cached.Metadata.Width == width && cached.Metadata.Height == height) return cached;
         var layout = ChartLayout.Create(document, width, height);
@@ -32,11 +33,11 @@ public sealed partial class SceneCompiler
         }
         BuildColorBars(document, layout, f);
         if (document.ShowLegend) BuildLegend(document, layout, f);
-        _frame = new(f.Vertices.ToArray(), new(width, height, document.Theme.Background.ToHex(),
+        var frame = new RenderFrame(f.Vertices.ToArray(), new(width, height, document.Theme.Background.ToHex(),
             f.Batches.ToArray(), f.Labels.ToArray(), f.Hits.ToArray(), layout.Plot, document.Revision,
             document.TotalPoints, f.Count, document.Title), layout);
-        _frame.Validate(); _document = document; CompilationCount++;
-        return _frame;
+        frame.Validate(); _frame = frame; _document = document; CompilationCount++;
+        return frame;
     }
     public void ClearCache() { _document = null; _frame = null; _indexes.Clear(); }
 
@@ -114,12 +115,7 @@ public sealed partial class SceneCompiler
                         f.Line(Map(segment.A),Map(segment.B),contour.ResolveColorScale().Color(segment.Level),contour.StrokeWidth,p);
                     break;
                 case HeatmapSeries heat when s.GetType()==typeof(HeatmapSeries):
-                    var g=heat.Grid; var scale=heat.ResolveColorScale();
-                    for (var row=0;row<g.Rows;row++) for(var col=0;col<g.Columns;col++)
-                    {
-                        var color=scale.Color(g[col,row]); if(color.A<=0) continue;
-                        if(IntensityGeometry.TryCellBounds(l,x,y,g,col,row,out var cell)) f.Rect(cell,color);
-                    }
+                    DrawHeatmap(heat, l, x, y, f);
                     break;
                 default: throw new NotSupportedException($"{s.GetType().Name} cannot be rendered in the XY view.");
             }

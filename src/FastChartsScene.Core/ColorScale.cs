@@ -32,7 +32,7 @@ public sealed class ColorMap
         }
         Name = name ?? ""; Interpolation = interpolation; Stops = Array.AsReadOnly(_stops);
     }
-    public ColorMap WithInterpolation(ColorInterpolation interpolation) => new(Name, _stops, interpolation);
+    public ColorMap WithInterpolation(ColorInterpolation interpolation) => interpolation == Interpolation ? this : new(Name, _stops, interpolation);
     public ColorRgba Evaluate(double unit)
     {
         if (!double.IsFinite(unit)) return new(0, 0, 0, 0);
@@ -80,12 +80,12 @@ public sealed class ColorScale
         MissingColor = missingColor ?? new(0, 0, 0, 0); ColorMap.ValidateColor(MissingColor);
         Palette = palette ?? ColorMap.Heat; Range = range; Mode = mode; Reversed = reversed; OutOfRange = outOfRange;
     }
-    public ColorScale WithPalette(ColorMap palette) => new(palette, Range, Mode, Reversed, MissingColor, OutOfRange);
-    public ColorScale WithRange(AxisRange? range) => new(Palette, range, Mode, Reversed, MissingColor, OutOfRange);
-    public ColorScale WithMode(ColorScaleMode mode) => new(Palette, Range, mode, Reversed, MissingColor, OutOfRange);
-    public ColorScale WithReversed(bool reversed) => new(Palette, Range, Mode, reversed, MissingColor, OutOfRange);
-    public ColorScale WithMissingColor(ColorRgba color) => new(Palette, Range, Mode, Reversed, color, OutOfRange);
-    public ColorScale WithOutOfRange(ColorOutOfRange behavior) => new(Palette, Range, Mode, Reversed, MissingColor, behavior);
+    public ColorScale WithPalette(ColorMap palette) => ReferenceEquals(palette, Palette) ? this : new(palette, Range, Mode, Reversed, MissingColor, OutOfRange);
+    public ColorScale WithRange(AxisRange? range) => range == Range ? this : new(Palette, range, Mode, Reversed, MissingColor, OutOfRange);
+    public ColorScale WithMode(ColorScaleMode mode) => mode == Mode ? this : new(Palette, Range, mode, Reversed, MissingColor, OutOfRange);
+    public ColorScale WithReversed(bool reversed) => reversed == Reversed ? this : new(Palette, Range, Mode, reversed, MissingColor, OutOfRange);
+    public ColorScale WithMissingColor(ColorRgba color) => color == MissingColor ? this : new(Palette, Range, Mode, Reversed, color, OutOfRange);
+    public ColorScale WithOutOfRange(ColorOutOfRange behavior) => behavior == OutOfRange ? this : new(Palette, Range, Mode, Reversed, MissingColor, behavior);
     /// <summary>Use NaN/NaN for an empty source. A constant source keeps its exact value and maps to the palette midpoint.</summary>
     public ResolvedColorScale Resolve(double minimum, double maximum)
     {
@@ -104,8 +104,12 @@ public sealed class ResolvedColorScale
     public double Maximum { get; }
     public bool HasValues { get; }
     public bool IsConstant => HasValues && Minimum == Maximum;
+    private readonly double _logSpan;
     internal ResolvedColorScale(ColorScale settings, double minimum, double maximum, bool hasValues)
-    { Settings = settings; Minimum = minimum; Maximum = maximum; HasValues = hasValues; }
+    {
+        Settings = settings; Minimum = minimum; Maximum = maximum; HasValues = hasValues;
+        _logSpan = settings.Mode == ColorScaleMode.Logarithmic && hasValues && minimum < maximum ? LogRatio(maximum, minimum) : 0;
+    }
     public bool IsDomainValue(double value) => double.IsFinite(value) && (Settings.Mode != ColorScaleMode.Logarithmic || value > 0);
     private static double LogRatio(double value, double basis)
     {
@@ -118,7 +122,7 @@ public sealed class ResolvedColorScale
         if (!HasValues || !IsDomainValue(value)) return double.NaN;
         if (IsConstant) return .5;
         if (value <= Minimum) return 0; if (value >= Maximum) return 1;
-        if (Settings.Mode == ColorScaleMode.Logarithmic) return LogRatio(value, Minimum) / LogRatio(Maximum, Minimum);
+        if (Settings.Mode == ColorScaleMode.Logarithmic) return LogRatio(value, Minimum) / _logSpan;
         var span = Maximum - Minimum;
         return double.IsFinite(span) ? (value - Minimum) / span : (value / 2 - Minimum / 2) / (Maximum / 2 - Minimum / 2);
     }
@@ -129,7 +133,7 @@ public sealed class ResolvedColorScale
         if (unit == 0 || IsConstant) return Minimum; if (unit == 1) return Maximum;
         if (Settings.Mode == ColorScaleMode.Logarithmic)
         {
-            var step = unit * LogRatio(Maximum, Minimum);
+            var step = unit * _logSpan;
             var delta = Math.Abs(step) < 1e-4 ? step * (1 + step * (.5 + step * (1.0 / 6 + step * (1.0 / 24 + step / 120)))) : Math.Exp(step) - 1;
             return Math.Abs(step) < .5 ? Minimum + Minimum * delta : Math.Exp(Math.Log(Minimum) + step);
         }
