@@ -33,7 +33,9 @@ all original commands/examples, or a pixel-equivalence certificate.
 
 `FastChartsScene.Core.CatalogBrowserModel` is independent of Uno/charts. It owns
 immutable metadata, case-insensitive keyword/phrase/category/tag filters and favorites.
-An identical normalized filter returns the same immutable result list. Inputs and
+An identical normalized filter returns the same immutable result list. Favorite edits
+retain ordinary result identity (and scroll position); only a favorites-only result
+needs its membership recomputed. Inputs and
 favorites files have explicit limits. `FilterPasses` distinguishes actual scans from
 cached queries. A changed query still performs an O(N) metadata scan; no instant-search
 performance guarantee is implied for arbitrary large catalogs.
@@ -71,7 +73,7 @@ byte[] projectZip = ChartProjectExport.Write(document, "MyChart");
 ChartProjectExport.Write(document, destination, "MyChart");
 ```
 
-Names are restricted to 1–64 ASCII identifier characters; paths are fixed and relative.
+Names are restricted to 1–64 ASCII identifier characters and reject reserved Windows device names; paths are fixed and relative.
 Chart strings are stored in JSON, never interpolated into source or build files. Model
 validation, a compatibility frame compile at 800×600, and serialization happen before
 writing any output. The document limit is 64 MiB UTF-8. IO failure can leave a partial

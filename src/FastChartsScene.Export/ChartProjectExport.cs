@@ -25,8 +25,8 @@ public static class ChartProjectExport
         ArgumentNullException.ThrowIfNull(document); ArgumentNullException.ThrowIfNull(output);
         if (!output.CanWrite) throw new ArgumentException("Output stream is not writable.", nameof(output));
         if (string.IsNullOrEmpty(projectName) || projectName.Length > 64 || !IsStart(projectName[0]) ||
-            projectName.Any(c => !IsStart(c) && !(c >= '0' && c <= '9')))
-            throw new ArgumentException("Project name must be an ASCII letter/underscore followed by up to 63 letters, digits or underscores.", nameof(projectName));
+            projectName.Any(c => !IsStart(c) && !(c >= '0' && c <= '9')) || IsReservedFileName(projectName))
+            throw new ArgumentException("Project name must be an ASCII identifier of at most 64 characters, and not a reserved device name.", nameof(projectName));
         ObjectDisposedException.ThrowIf(document.IsDisposed, document);
         new SceneCompiler().Compile(document, 800, 600).Validate();
         var json = ChartJson.Write(document);
@@ -48,6 +48,12 @@ public static class ChartProjectExport
         }
     }
     private static bool IsStart(char c) => c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c == '_';
+    private static bool IsReservedFileName(string name)
+    {
+        var upper = name.ToUpperInvariant();
+        return upper is "CON" or "PRN" or "AUX" or "NUL" || upper.Length == 4 &&
+            (upper.StartsWith("COM", StringComparison.Ordinal) || upper.StartsWith("LPT", StringComparison.Ordinal)) && upper[3] is >= '1' and <= '9';
+    }
     private const string Project = """
         <Project Sdk="Uno.Sdk">
           <PropertyGroup>

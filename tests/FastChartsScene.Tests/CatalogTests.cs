@@ -21,13 +21,21 @@ internal static partial class Program
         Add("catalog identical normalized queries reuse result lists", () => {
             var c=Catalog();var a=c.Filter("signals  continuous");var b=c.Filter(" CONTINUOUS signals ");
             True(ReferenceEquals(a,b));Equal(1,c.FilterPasses);
-            c.SetFavorite("signals",true);c.Filter("signals continuous");Equal(2,c.FilterPasses);
+            c.SetFavorite("signals",true);True(ReferenceEquals(a,c.Filter("signals continuous")));Equal(1,c.FilterPasses);
+            Equal(1,c.Filter(favoritesOnly:true).Count);Equal(2,c.FilterPasses);
+            c.SetFavorite("surface",true);Equal(2,c.Filter(favoritesOnly:true).Count);Equal(3,c.FilterPasses);
         });
         Add("favorite changes notify once and roundtrip deterministically", () => {
             var a=Catalog();var events=0;a.FavoritesChanged+=(_,_)=>events++;
             a.SetFavorite("signals",true);a.SetFavorite("signals",true);a.SetFavorite("surface",true);Equal(2,events);
             Equal(2,a.Filter(favoritesOnly:true).Count);var text=a.ExportFavorites();var b=Catalog();b.ImportFavorites(text);True(text==b.ExportFavorites());
             b.ImportFavorites(text);a.SetFavorite("signals",false);Equal(1,a.FavoriteCount);
+        });
+        Add("favorite imports retain ordinary result identity and invalidate favorite membership", () => {
+            var c=Catalog();var ordinary=c.Filter();var other=Catalog();other.SetFavorite("surface",true);
+            c.ImportFavorites(other.ExportFavorites());True(ReferenceEquals(ordinary,c.Filter()));Equal(1,c.FilterPasses);
+            var favorites=c.Filter(favoritesOnly:true);other.SetFavorite("signals",true);c.ImportFavorites(other.ExportFavorites());
+            var changed=c.Filter(favoritesOnly:true);True(!ReferenceEquals(favorites,changed));Equal(2,changed.Count);
         });
         Add("invalid favorites never discard the prior list", () => {
             var c=Catalog();c.SetFavorite("signals",true);var original=c.ExportFavorites();

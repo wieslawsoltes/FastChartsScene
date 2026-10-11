@@ -68,7 +68,7 @@ jobs:
         run: |
           mkdir -p artifacts/packages
           for project in src/*/*.csproj; do
-            dotnet pack "$project" -c Release --no-build --no-restore -p:IsPackable=true -o artifacts/packages
+            dotnet pack "$project" -c Release -p:IsPackable=true -o artifacts/packages
           done
           python tests/verify-packages.py | tee artifacts/package-tests.txt
       - name: Compile isolated package consumer

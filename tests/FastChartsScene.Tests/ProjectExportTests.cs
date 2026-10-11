@@ -25,7 +25,7 @@ internal static partial class Program
         });
         Add("project extraction rejects invalid names and disposed charts before output", () => {
             using var d=LineDocument();
-            foreach(var name in new[]{"../bad","a/b","x.csproj","x\"y","9chart","a b","",new string('a',65)})
+            foreach(var name in new[]{"../bad","a/b","x.csproj","x\"y","9chart","a b","","CON","nul","Com1","LPT9",new string('a',65)})
             { using var stream=new MemoryStream();Throws<ArgumentException>(()=>ChartProjectExport.Write(d,stream,name));Equal(0,stream.Length); }
             d.Dispose();using var output=new MemoryStream();Throws<ObjectDisposedException>(()=>ChartProjectExport.Write(d,output));Equal(0,output.Length);
         });

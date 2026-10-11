@@ -35,6 +35,7 @@ public sealed class CatalogBrowserModel
     private readonly Dictionary<string, CatalogEntry> _byId;
     private readonly HashSet<string> _favorites = new(StringComparer.Ordinal);
     private string? _filterKey;
+    private bool _filterUsesFavorites;
     private IReadOnlyList<CatalogEntry> _filtered = Array.Empty<CatalogEntry>();
     public IReadOnlyList<CatalogEntry> Entries { get; }
     public IReadOnlyList<string> Categories { get; }
@@ -58,7 +59,7 @@ public sealed class CatalogBrowserModel
     {
         Find(id);
         var changed = value ? _favorites.Add(id) : _favorites.Remove(id);
-        if (changed) { _filterKey = null; FavoritesChanged?.Invoke(this, EventArgs.Empty); }
+        if (changed) { if (_filterUsesFavorites) _filterKey = null; FavoritesChanged?.Invoke(this, EventArgs.Empty); }
     }
     public IReadOnlyList<CatalogEntry> Filter(string query = "", string? category = null,
         IEnumerable<string>? tags = null, bool matchAllTags = true, bool favoritesOnly = false)
@@ -80,7 +81,7 @@ public sealed class CatalogBrowserModel
             (!favoritesOnly || _favorites.Contains(entry.Id)) && words.All(word => entry.SearchText.Contains(word, StringComparison.OrdinalIgnoreCase)) &&
             (selected.Length == 0 || (matchAllTags ? selected.All(t => entry.Tags.Contains(t, StringComparer.OrdinalIgnoreCase)) : selected.Any(t => entry.Tags.Contains(t, StringComparer.OrdinalIgnoreCase))));
         var result = Array.AsReadOnly(Entries.Where(Matches).ToArray());
-        _filtered = result; _filterKey = normalized; FilterPasses++; return result;
+        _filtered = result; _filterKey = normalized; _filterUsesFavorites = favoritesOnly; FilterPasses++; return result;
     }
     private static string[] Tokenize(string text)
     {
@@ -127,6 +128,6 @@ public sealed class CatalogBrowserModel
                 throw new FormatException("Favorite IDs must be known and unique.");
         }
         if (_favorites.SetEquals(next)) return;
-        _favorites.Clear(); _favorites.UnionWith(next); _filterKey = null; FavoritesChanged?.Invoke(this, EventArgs.Empty);
+        _favorites.Clear(); _favorites.UnionWith(next); if (_filterUsesFavorites) _filterKey = null; FavoritesChanged?.Invoke(this, EventArgs.Empty);
     }
 }

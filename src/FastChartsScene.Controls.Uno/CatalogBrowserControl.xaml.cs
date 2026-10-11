@@ -80,6 +80,10 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
     public CatalogBrowserControl()
     {
         InitializeComponent();
+        // ListViewBase handles Enter as part of selection. Observe that routed key as
+        // well, so the catalog can perform its documented Open action after selection.
+        Tiles.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(EntryKeyDown), true);
+        List.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(EntryKeyDown), true);
         LayoutUpdated += (_, _) => ApplyPendingScroll();
         _debounce.Tick += (_, _) => { _debounce.Stop(); ApplyFilter(); };
         SizeChanged += (_, _) => { var compact = ActualWidth < 850; PreviewColumn.Width = new GridLength(compact ? 0 : 300); PreviewPane.Visibility = compact ? Visibility.Collapsed : Visibility.Visible; };
@@ -182,7 +186,14 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
     }
     private void OpenClicked(object sender, RoutedEventArgs args) { if (SelectedEntry != null) OpenRequested?.Invoke(this, SelectedEntry); }
     private void OpenDoubleTapped(object sender, DoubleTappedRoutedEventArgs args) { OpenClicked(sender, new RoutedEventArgs()); args.Handled = true; }
-    private void EntryKeyDown(object sender, KeyRoutedEventArgs args) { if (args.Key == VirtualKey.Enter) { OpenClicked(sender, new RoutedEventArgs()); args.Handled = true; } }
+    private void EntryKeyDown(object sender, KeyRoutedEventArgs args)
+    {
+        if (_disposed || Visibility != Visibility.Visible || args.Key != VirtualKey.Enter) return;
+        // Enter on an embedded favorite button belongs to that button, not navigation.
+        for (var node = args.OriginalSource as DependencyObject; node != null && !ReferenceEquals(node, sender); node = VisualTreeHelper.GetParent(node))
+            if (node is ButtonBase) return;
+        OpenClicked(sender, new RoutedEventArgs()); args.Handled = true;
+    }
     private void FavoriteClicked(object sender, RoutedEventArgs args)
     { if (sender is Button { Tag: string id } && _model != null) _model.SetFavorite(id, !_model.IsFavorite(id)); }
     private void FavoriteSelectedClicked(object sender, RoutedEventArgs args)
