@@ -33,15 +33,7 @@ public sealed partial class ChartInteraction
             var first = 0; var end = series.Data.Count;
             if (series.Data.IsOrdered)
             {
-                var axis = transpose ? y : x;
-                var a = transpose ? (pane.Bottom - Math.Max(pane.Y, location.Y - radius)) / pane.Height :
-                    (Math.Max(pane.X, location.X - radius) - pane.X) / pane.Width;
-                var b = transpose ? (pane.Bottom - Math.Min(pane.Bottom, location.Y + radius)) / pane.Height :
-                    (Math.Min(pane.Right, location.X + radius) - pane.X) / pane.Width;
-                var va = axis.FromUnit(a); var vb = axis.FromUnit(b);
-                // Include adjacent samples to absorb a few ULPs of inverse-transform rounding.
-                first = Math.Max(0, DataSearch.LowerBound(series.Data, Math.Min(va, vb)) - 1);
-                end = Math.Min(series.Data.Count, DataSearch.UpperBound(series.Data, Math.Max(va, vb)) + 1);
+                (first, end) = VisibleSourceWindow(series.Data, transpose ? y : x, pane, location, radius, transpose);
             }
             PointQueryResult query;
             if (end - first <= 2048)
@@ -57,6 +49,34 @@ public sealed partial class ChartInteraction
                 best = new(series.Id, series.Title, hit.Index, hit.Data, hit.Screen, hit.Distance);
         }
         return best;
+    }
+    // Search projected positions directly instead of inverse-transforming the cursor window.
+    // This preserves duplicate-X groups and boundary samples even when axis inversion would
+    // round an inverse data coordinate by several representable values.
+    private static (int First, int End) VisibleSourceWindow(IDataSource data, Axis axis, RectD pane,
+        PointD location, double radius, bool vertical)
+    {
+        var first = DataSearch.LowerBound(data, axis.Range.Minimum);
+        var end = DataSearch.UpperBound(data, axis.Range.Maximum);
+        var coordinate = vertical ? location.Y : location.X;
+        var minimum = Math.BitDecrement(coordinate - radius);
+        var maximum = Math.BitIncrement(coordinate + radius);
+        var ascending = vertical ? axis.Inverted : !axis.Inverted;
+        int Boundary(bool upper)
+        {
+            var a = first; var b = end;
+            while (a < b)
+            {
+                var middle = a + (b - a) / 2;
+                var unit = axis.ToUnit(data.X(middle));
+                var screen = vertical ? pane.Bottom - unit * pane.Height : pane.X + unit * pane.Width;
+                var skip = ascending ? (upper ? screen <= maximum : screen < minimum) :
+                    (upper ? screen >= minimum : screen > maximum);
+                if (skip) a = middle + 1; else b = middle;
+            }
+            return a;
+        }
+        var lower = Boundary(false); var upper = Boundary(true); return (lower, upper);
     }
     private static PointQueryResult Scan(IDataSource data, Axis x, Axis y, RectD pane, PointD location,
         double radius, bool transpose, int first, int end)
