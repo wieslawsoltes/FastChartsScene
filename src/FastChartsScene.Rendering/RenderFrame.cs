@@ -48,8 +48,13 @@ public sealed class ChartLayout
 {
     public RectD Plot { get; }
     public IReadOnlyDictionary<string, RectD> AxisPlots { get; }
-    private ChartLayout(RectD plot, Dictionary<string, RectD> axisPlots)
-    { Plot = plot; AxisPlots = new System.Collections.ObjectModel.ReadOnlyDictionary<string, RectD>(axisPlots); }
+    public IReadOnlyDictionary<string, ColorBarPlacement> ColorBars { get; }
+    private ChartLayout(RectD plot, Dictionary<string, RectD> axisPlots, Dictionary<string, ColorBarPlacement> colorBars)
+    {
+        Plot = plot;
+        AxisPlots = new System.Collections.ObjectModel.ReadOnlyDictionary<string, RectD>(axisPlots);
+        ColorBars = new System.Collections.ObjectModel.ReadOnlyDictionary<string, ColorBarPlacement>(colorBars);
+    }
     public RectD ForAxis(string id) => AxisPlots.TryGetValue(id, out var p) ? p : Plot;
     public static ChartLayout Create(ChartDocument document, double width, double height)
     {
@@ -68,7 +73,10 @@ public sealed class ChartLayout
         if (document.View is ChartView.Polar or ChartView.Smith) { left = 48; right = 48; bottom = 38; }
         if (document.View is ChartView.ThreeD or ChartView.Pie3D) { left = 28; right = 28; bottom = 28; }
         var actualLeft = Math.Min(left, width * .35);
-        var actualRight = Math.Min(right, width * .2);
+        var colorSeries = document.View is ChartView.XY or ChartView.ThreeD
+            ? document.Series.OfType<HeatmapSeries>().Where(s => s.Visible && s.ShowColorBar).ToArray() : [];
+        var colorGutter = colorSeries.Length > 0 ? Math.Min(116, width * .28) : 0;
+        var actualRight = Math.Min(right, width * .2) + colorGutter;
         var actualTop = Math.Min(top, height * .25);
         var actualBottom = Math.Min(bottom, height * .25);
         var plot = new RectD(actualLeft, actualTop, width - actualLeft - actualRight, height - actualTop - actualBottom);
@@ -98,7 +106,22 @@ public sealed class ChartLayout
             }
         }
         foreach (var a in document.YAxes) mapping.TryAdd(a.Id, plot);
-        return new(plot, mapping);
+        Dictionary<string, ColorBarPlacement> colorBars = [];
+        foreach (var group in colorSeries.GroupBy(s => mapping[s.YAxisId]))
+        {
+            var pane = group.Key; var items = group.ToArray();
+            var gap = Math.Min(8, pane.Height / (items.Length * 4));
+            var barHeight = (pane.Height - gap * (items.Length - 1)) / items.Length;
+            var padding = Math.Min(8, colorGutter * .1);
+            for (var i = 0; i < items.Length; i++)
+            {
+                var region = new RectD(width - colorGutter + padding, pane.Y + i * (barHeight + gap), colorGutter - 2 * padding, barHeight);
+                var heading = Math.Min(34, region.Height * .28); var bottomPad = Math.Min(6, region.Height * .08);
+                var strip = new RectD(region.X, region.Y + heading, Math.Min(18, region.Width * .22), region.Height - heading - bottomPad);
+                colorBars.Add(items[i].Id, new(region, strip));
+            }
+        }
+        return new(plot, mapping, colorBars);
     }
     public PointD ToScreen(Axis x, Axis y, PointD point)
     {

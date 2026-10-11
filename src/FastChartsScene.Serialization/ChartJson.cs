@@ -12,7 +12,7 @@ public sealed record ChartReadLimits(int MaximumCharacters=64*1024*1024,int Maxi
 /// No type names, executable payloads, external file references or network locations are activated.
 /// Series IDs are session identities and are regenerated on import; order and axis bindings are preserved.
 /// NaN samples use JSON null. Floating-point values and colors round-trip without quantization.</summary>
-public static class ChartJson
+public static partial class ChartJson
 {
     public const int CurrentVersion=1;
     public static string Write(ChartDocument document,bool indented=false)
@@ -74,7 +74,7 @@ public static class ChartJson
         var kind=s switch { LineSeries=>"line",BandSeries=>"band",BarSeries=>"bar",ErrorBarSeries=>"error",FinancialSeries=>"financial",ContourSeries=>"contour",SurfaceSeries3D=>"surface",WaterfallSeries3D=>"waterfall",BarSeries3D=>"bars3d",PointLineSeries3D=>"points3d",MeshSeries3D=>"mesh",PieSeries=>"pie",HeatmapSeries when s.GetType()==typeof(HeatmapSeries)=>"heatmap",_=>throw new NotSupportedException("Unsupported series type: "+s.GetType().Name) };
         w.WriteStartObject(); w.WriteString("kind",kind); w.WriteString("title",s.Title); w.WriteBoolean("visible",s.Visible); w.WriteString("xAxis",s.XAxisId); w.WriteString("yAxis",s.YAxisId); w.WriteNumber("strokeWidth",s.StrokeWidth); Color(w,"color",s.Color);
         if(s is DataSeries data) Data(w,"data",data.Data);
-        if(s is HeatmapSeries heat) Grid(w,heat.Grid);
+        if(s is HeatmapSeries heat) { Grid(w,heat.Grid); WriteColorSettings(w,heat); }
         switch(s)
         {
             case LineSeries line:
@@ -142,7 +142,7 @@ public static class ChartJson
         if(!Enum.TryParse<T>(text,false,out var result)||!Enum.IsDefined(result)||result.ToString()!=text) throw new FormatException("Invalid "+name+": "+text);
         return result;
     }
-    private sealed class Reader(ChartReadLimits limits)
+    private sealed partial class Reader(ChartReadLimits limits)
     {
         private int _numericValues;
         public JsonElement.ArrayEnumerator Items(JsonElement e,int maximum)
@@ -197,7 +197,7 @@ public static class ChartJson
             Series series=Text(e,"kind") switch { "line"=>new LineSeries(),"band"=>new BandSeries(),"bar"=>new BarSeries(),"error"=>new ErrorBarSeries(),"financial"=>new FinancialSeries(),"heatmap"=>new HeatmapSeries(),"contour"=>new ContourSeries(),"surface"=>new SurfaceSeries3D(),"waterfall"=>new WaterfallSeries3D(),"bars3d"=>new BarSeries3D(),"points3d"=>new PointLineSeries3D(),"mesh"=>new MeshSeries3D(),"pie"=>new PieSeries(),_=>throw new FormatException("Unknown series kind.") };
             series.Title=Text(e,"title"); series.Visible=e.GetProperty("visible").GetBoolean(); series.XAxisId=Text(e,"xAxis"); series.YAxisId=Text(e,"yAxis"); series.StrokeWidth=Number(e,"strokeWidth"); series.Color=Color(e,"color");
             if(series is DataSeries data) data.Data=Data(e.GetProperty("data"));
-            if(series is HeatmapSeries heat) heat.Grid=Grid(e.GetProperty("grid"));
+            if(series is HeatmapSeries heat) { heat.Grid=Grid(e.GetProperty("grid")); ReadColorSettings(e,heat); }
             switch(series)
             {
                 case LineSeries line:

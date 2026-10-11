@@ -61,7 +61,7 @@ internal static class ThreeDScene
             switch(s)
             {
                 case SurfaceSeries3D surface:
-                    var g=surface.Grid;
+                    var g=surface.Grid; var surfaceScale=surface.ResolveColorScale();
                     for(var row=0;row<g.Rows-1;row++) for(var col=0;col<g.Columns-1;col++)
                     {
                         var v0=g[col,row]; var v1=g[col+1,row]; var v2=g[col+1,row+1]; var v3=g[col,row+1];
@@ -69,26 +69,26 @@ internal static class ThreeDScene
                         var b=double.IsFinite(v1)?Map(new(g.X(col+1),v1,g.Y(row))):default;
                         var c=double.IsFinite(v2)?Map(new(g.X(col+1),v2,g.Y(row+1))):default;
                         var e=double.IsFinite(v3)?Map(new(g.X(col),v3,g.Y(row+1))):default;
-                        if(double.IsFinite(v0)&&double.IsFinite(v1)&&double.IsFinite(v2)) f.Triangle3D(a,c,b,Palette.Heat(g.Normalized(v0)),Palette.Heat(g.Normalized(v2)),Palette.Heat(g.Normalized(v1)));
-                        if(double.IsFinite(v0)&&double.IsFinite(v2)&&double.IsFinite(v3)) f.Triangle3D(a,e,c,Palette.Heat(g.Normalized(v0)),Palette.Heat(g.Normalized(v3)),Palette.Heat(g.Normalized(v2)));
+                        if(double.IsFinite(v0)&&double.IsFinite(v1)&&double.IsFinite(v2)) f.Triangle3D(a,c,b,surfaceScale.Color(v0),surfaceScale.Color(v2),surfaceScale.Color(v1));
+                        if(double.IsFinite(v0)&&double.IsFinite(v2)&&double.IsFinite(v3)) f.Triangle3D(a,e,c,surfaceScale.Color(v0),surfaceScale.Color(v3),surfaceScale.Color(v2));
                     }
                     break;
                 case WaterfallSeries3D waterfall:
-                    var wg=waterfall.Grid;
+                    var wg=waterfall.Grid; var waterfallScale=waterfall.ResolveColorScale();
                     for(var row=0;row<wg.Rows;row++) for(var col=1;col<wg.Columns;col++)
                     {
                         var v0=wg[col-1,row]; var v1=wg[col,row]; if(!double.IsFinite(v0)||!double.IsFinite(v1)) continue;
-                        Tube(f,Map(new(wg.X(col-1),v0,wg.Y(row))),Map(new(wg.X(col),v1,wg.Y(row))),.004f,Palette.Heat((double)row/Math.Max(1,wg.Rows-1)));
+                        Tube(f,Map(new(wg.X(col-1),v0,wg.Y(row))),Map(new(wg.X(col),v1,wg.Y(row))),.004f,waterfallScale.Color(v0),waterfallScale.Color(v1));
                     }
                     break;
                 case BarSeries3D bars:
-                    var bg=bars.Grid;
+                    var bg=bars.Grid; var barScale=bars.ResolveColorScale();
                     for(var row=0;row<bg.Rows;row++) for(var col=0;col<bg.Columns;col++)
                     {
                         var v=bg[col,row]; if(!double.IsFinite(v)) continue;
                         var q=Map(new(bg.X(col),v,bg.Y(row))); var bottom=Map(new(bg.X(col),Math.Clamp(0,d.YAxis.Range.Minimum,d.YAxis.Range.Maximum),bg.Y(row)));
                         var dx=.7f/Math.Max(1,bg.Columns); var dz=.7f/Math.Max(1,bg.Rows);
-                        Box(f,new(q.X-dx,Math.Min(bottom.Y,q.Y),q.Z-dz),new(q.X+dx,Math.Max(bottom.Y,q.Y),q.Z+dz),Palette.Heat(bg.Normalized(v)));
+                        Box(f,new(q.X-dx,Math.Min(bottom.Y,q.Y),q.Z-dz),new(q.X+dx,Math.Max(bottom.Y,q.Y),q.Z+dz),barScale.Color(v));
                     }
                     break;
                 case MeshSeries3D mesh:
@@ -114,7 +114,7 @@ internal static class ThreeDScene
         }
         if(d.Annotations.Count>0) throw new NotSupportedException("3D annotations are not implemented.");
     }
-    private static void Tube(FrameBuilder f,Vector3 a,Vector3 b,float radius,ColorRgba color)
+    private static void Tube(FrameBuilder f,Vector3 a,Vector3 b,float radius,ColorRgba color,ColorRgba? endColor=null)
     {
         var delta=b-a; if(delta.LengthSquared()<1e-16f) return;
         var axis=Vector3.Normalize(delta); var up=Math.Abs(axis.Y)<.9f?Vector3.UnitY:Vector3.UnitX;
@@ -123,7 +123,7 @@ internal static class ThreeDScene
         {
             var a0=i*MathF.PI/3; var a1=(i+1)*MathF.PI/3;
             var n0=MathF.Cos(a0)*u+MathF.Sin(a0)*v; var n1=MathF.Cos(a1)*u+MathF.Sin(a1)*v;
-            f.Triangle3D(a+n0,b+n0,b+n1,color,color,color); f.Triangle3D(a+n0,b+n1,a+n1,color,color,color);
+            f.Triangle3D(a+n0,b+n0,b+n1,color,endColor??color,endColor??color); f.Triangle3D(a+n0,b+n1,a+n1,color,endColor??color,color);
         }
     }
     private static void Box(FrameBuilder f,Vector3 min,Vector3 max,ColorRgba color)

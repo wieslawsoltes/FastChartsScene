@@ -7,7 +7,7 @@ namespace FastChartsScene.Rendering;
 
 /// <summary>Compiles chart models into clipped GPU triangles. UI-thread-affine; immutable data indexes
 /// are weakly cached, and an unchanged document/size reuses its entire frame without allocating.</summary>
-public sealed class SceneCompiler
+public sealed partial class SceneCompiler
 {
     private readonly ConditionalWeakTable<IDataSource, EnvelopeIndex> _indexes = new();
     private ChartDocument? _document;
@@ -30,6 +30,7 @@ public sealed class SceneCompiler
             case ChartView.ThreeD: case ChartView.Pie3D: ThreeDScene.Build(document, layout, f); break;
             default: throw new NotSupportedException($"Unknown chart view {document.View}.");
         }
+        BuildColorBars(document, layout, f);
         if (document.ShowLegend) BuildLegend(document, layout, f);
         _frame = new(f.Vertices.ToArray(), new(width, height, document.Theme.Background.ToHex(),
             f.Batches.ToArray(), f.Labels.ToArray(), f.Hits.ToArray(), layout.Plot, document.Revision,
@@ -110,20 +111,14 @@ public sealed class SceneCompiler
                     break;
                 case ContourSeries contour:
                     foreach (var segment in GeometryAlgorithms.Contours(contour.Grid,contour.Levels.Span))
-                        f.Line(Map(segment.A),Map(segment.B),Palette.Heat(contour.Grid.Normalized(segment.Level)),contour.StrokeWidth,p);
+                        f.Line(Map(segment.A),Map(segment.B),contour.ResolveColorScale().Color(segment.Level),contour.StrokeWidth,p);
                     break;
                 case HeatmapSeries heat when s.GetType()==typeof(HeatmapSeries):
-                    var g=heat.Grid;
-                    // Samples are cell centers. Boundary cells stop at the declared grid extents.
+                    var g=heat.Grid; var scale=heat.ResolveColorScale();
                     for (var row=0;row<g.Rows;row++) for(var col=0;col<g.Columns;col++)
                     {
-                        var v=g[col,row]; if(!double.IsFinite(v)) continue;
-                        var x0=col==0?g.XMinimum:(g.X(col-1)+g.X(col))/2;
-                        var x1=col==g.Columns-1?g.XMaximum:(g.X(col)+g.X(col+1))/2;
-                        var y0=row==0?g.YMinimum:(g.Y(row-1)+g.Y(row))/2;
-                        var y1=row==g.Rows-1?g.YMaximum:(g.Y(row)+g.Y(row+1))/2;
-                        var a=Map(new(x0,y0)); var b=Map(new(x1,y1));
-                        FillPolygon(f,[a,new(b.X,a.Y),b,new(a.X,b.Y)],Palette.Heat(g.Normalized(v)),p);
+                        var color=scale.Color(g[col,row]); if(color.A<=0) continue;
+                        if(IntensityGeometry.TryCellBounds(l,x,y,g,col,row,out var cell)) f.Rect(cell,color);
                     }
                     break;
                 default: throw new NotSupportedException($"{s.GetType().Name} cannot be rendered in the XY view.");
