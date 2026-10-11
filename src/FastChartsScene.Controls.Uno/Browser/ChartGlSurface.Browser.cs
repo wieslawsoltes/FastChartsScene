@@ -9,8 +9,8 @@ using global::Uno.WinUI.Graphics2DSK;
 
 namespace FastChartsScene.Controls.Uno;
 
-/// <summary>Browser-owned WebGL2 context. Geometry is rendered on WebGL, read as standard RGBA,
-/// and composed into Uno's Skia scene. No global WebGL/runtime functions are replaced.</summary>
+/// <summary>Browser-owned WebGL2 context. The backend is a static WasmScripts asset loaded by
+/// Uno Bootstrapper. Standard RGBA readback avoids platform-specific BGRA presentation errors.</summary>
 internal sealed partial class ChartGlSurface : SKCanvasElement
 {
     public static readonly DependencyProperty IsGLInitializedProperty=DependencyProperty.Register(nameof(IsGLInitialized),typeof(bool?),typeof(ChartGlSurface),new PropertyMetadata(null));
@@ -21,7 +21,6 @@ internal sealed partial class ChartGlSurface : SKCanvasElement
     public long Submissions { get; private set; }
     public event Action? Rendered;
     private static int _nextId;
-    private static bool _scriptLoaded;
     private readonly int _id=Interlocked.Increment(ref _nextId);
     private SKBitmap? _bitmap;
     private byte[] _pixels=[];
@@ -40,11 +39,6 @@ internal sealed partial class ChartGlSurface : SKCanvasElement
         if(_contextCreated) return;
         try
         {
-            if(!_scriptLoaded)
-            {
-                using var stream=typeof(ChartGlSurface).Assembly.GetManifestResourceStream("FastChartsScene.Controls.Uno.Browser.webgl.js")??throw new InvalidOperationException("Missing packaged WebGL backend.");
-                using var reader=new StreamReader(stream); global::Uno.Foundation.WebAssemblyRuntime.InvokeJS(reader.ReadToEnd()); _scriptLoaded=true;
-            }
             Driver=Create(_id); _contextCreated=true; _uploaded=_drawn=null; Error=null; IsGLInitialized=true; Invalidate();
         }
         catch(Exception error) { Error=error.Message; IsGLInitialized=false; Console.Error.WriteLine("Chart WebGL initialization: "+error); }
