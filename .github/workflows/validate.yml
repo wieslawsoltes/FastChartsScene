@@ -1,0 +1,118 @@
+name: Validate
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build and test portable packages
+        run: |
+          mkdir -p artifacts
+          dotnet run --project tests/FastChartsScene.Tests -c Release 2>&1 | tee artifacts/core-tests.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-results
+          path: artifacts/core-tests.txt
+  uno:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preserve exact source revision
+        run: |
+          mkdir -p artifacts
+          git archive --format=zip --output=artifacts/source.zip HEAD
+          git rev-parse HEAD HEAD^{tree} > artifacts/source-revision.txt
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install WebAssembly workload
+        run: dotnet workload install wasm-tools
+      - name: Compile desktop target
+        run: dotnet build samples/FastChartsScene.Explorer -c Release -f net10.0-desktop 2>&1 | tee artifacts/desktop-build.txt
+      - name: Publish browser application
+        id: publish
+        run: dotnet publish samples/FastChartsScene.Explorer -c Release -f net10.0-browserwasm -o artifacts/publish 2>&1 | tee artifacts/browser-build.txt
+      - name: Locate browser bundle
+        id: site
+        run: |
+          index=$(find artifacts/publish -name index.html -not -path '*/_framework/*' | head -1)
+          test -n "$index"
+          mkdir -p artifacts/site/FastChartsScene
+          cp -a "$(dirname "$index")/." artifacts/site/FastChartsScene/
+          touch artifacts/site/FastChartsScene/.nojekyll
+          printf '{"commit":"%s","tree":"%s"}\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" > artifacts/site/FastChartsScene/revision.json
+      - name: Pack and verify reusable libraries
+        id: pack
+        run: |
+          mkdir -p artifacts/packages
+          for project in src/*/*.csproj; do
+            dotnet pack "$project" -c Release -p:IsPackable=true -o artifacts/packages
+          done
+          python tests/verify-packages.py | tee artifacts/package-tests.txt
+      - name: Compile isolated package consumer
+        if: steps.pack.outcome == 'success'
+        run: |
+          dotnet build tests/PackageConsumer -c Release -f net10.0-desktop 2>&1 | tee artifacts/package-consumer-desktop.txt
+          dotnet build tests/PackageConsumer -c Release -f net10.0-browserwasm 2>&1 | tee artifacts/package-consumer-browser.txt
+      - uses: actions/setup-node@v4
+        if: always() && steps.site.outcome == 'success'
+        with:
+          node-version: '22'
+      - name: Install browser test dependencies
+        id: browser_dependencies
+        if: always() && steps.site.outcome == 'success'
+        working-directory: tests/browser
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund --no-package-lock
+          npx playwright install --with-deps chromium
+      - name: Validate actual GPU application
+        if: always() && steps.browser_dependencies.outcome == 'success'
+        working-directory: tests/browser
+        run: node browser-tests.mjs 2>&1 | tee ../../artifacts/browser-tests.txt
+      - name: Validate current-build 2D and 3D fallback
+        if: always() && steps.browser_dependencies.outcome == 'success'
+        working-directory: tests/browser
+        run: node fallback-tests.mjs 2>&1 | tee ../../artifacts/fallback-tests.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-evidence
+          path: |
+            artifacts/*.txt
+            artifacts/browser-results
+            artifacts/fallback-results
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: source
+          path: artifacts/source.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: packages
+          path: artifacts/packages
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-site
+          path: artifacts/site/FastChartsScene
+          include-hidden-files: true

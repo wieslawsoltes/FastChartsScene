@@ -1,0 +1,17 @@
+<Project Sdk="Uno.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0-browserwasm;net10.0-desktop</TargetFrameworks>
+    <OutputType>Library</OutputType><UnoSingleProject>true</UnoSingleProject><IsPackable>true</IsPackable>
+    <UnoFeatures>SkiaRenderer;GLCanvas;</UnoFeatures>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-browserwasm'">
+    <Compile Remove="ChartGlSurface.cs;GlQueries.cs" />
+    <!-- Uno Bootstrapper extracts library WasmScripts resources as static assets and loads
+         them before the managed application. No dynamic evaluation or external CDN. -->
+    <EmbeddedResource Include="Browser/webgl.js" Link="WasmScripts/fastchartsscene-webgl.js" LogicalName="FastChartsScene.Controls.Uno.WasmScripts.fastchartsscene-webgl.js" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../FastChartsScene.Interaction/FastChartsScene.Interaction.csproj" />
+    <ProjectReference Include="../FastChartsScene.Rendering.Skia/FastChartsScene.Rendering.Skia.csproj" />
+  </ItemGroup>
+</Project>
