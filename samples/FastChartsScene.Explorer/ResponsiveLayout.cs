@@ -21,7 +21,7 @@ public sealed partial class ExplorerPage
         Chart.SizeChanged+=(_,_)=>UpdateCompactLayout();
         Loaded+=(_,_)=>UpdateCompactLayout();
         // The toolbar and pane controls are created by the page constructor, before loading.
-        var tools=(ScrollViewer)_root.Children[1];
+        var tools=_toolbarScroll;
         var buttons=((StackPanel)tools.Content).Children.OfType<Button>();
         foreach(var button in buttons)
         {
@@ -29,7 +29,6 @@ public sealed partial class ExplorerPage
             if(title=="Examples") button.Click+=(_,_)=>
             {
                 if(ActualWidth>=680) return;
-                _galleryVisible=true;
                 var menu=new MenuFlyout();
                 foreach(var example in FastChartsScene.Examples.ExampleCatalog.All)
                 {
@@ -44,7 +43,7 @@ public sealed partial class ExplorerPage
             {
                 if(ActualWidth>=1100||InspectorDialogOpen) return;
                 _inspectorVisible=true;
-                var owner=(ScrollViewer)_workspace.Children[2];
+                var owner=_inspectorScroll;
                 var scroll=new ScrollViewer { HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,HorizontalScrollMode=ScrollMode.Disabled,MaxHeight=560 };
                 try
                 {
@@ -59,7 +58,7 @@ public sealed partial class ExplorerPage
     }
     private void UpdateCompactLayout()
     {
-        if(_root.Children[0] is Grid brand)
+        if(_brand is Grid brand)
         {
             if(brand.Children[0] is StackPanel identity&&identity.Children.Count>2)
                 identity.Children[2].Visibility=ActualWidth>=820?Visibility.Visible:Visibility.Collapsed;
