@@ -1,0 +1,48 @@
+name: Pages
+on:
+  workflow_run:
+    workflows: [Validate]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download the validated main browser build
+        uses: actions/download-artifact@v4
+        with:
+          name: browser-site
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: site
+      - name: Verify artifact revision matches the successful run
+        env:
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          revision = json.loads(Path('site/revision.json').read_text())
+          assert revision['commit'] == os.environ['EXPECTED_SHA'], revision
+          assert Path('site/index.html').is_file()
+          print('Publishing tested commit', revision['commit'], 'tree', revision['tree'])
+          PY
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: Deploy validated application
+        id: deployment
+        uses: actions/deploy-pages@v4

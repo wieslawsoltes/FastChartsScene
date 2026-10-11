@@ -1,61 +1,59 @@
 # Architecture
 
-## Dependency direction
+## Reusable dependency graph
 
 ```text
-Core <- Data <- SignalProcessing
-  ^       ^
-  +---- Charts
-           ^
-           +-- Serialization
-           +-- Examples (+ SignalProcessing)
-           +-- Rendering -- Interaction
-                    |
-                    +-- Rendering.Skia
-                              |
-                    Controls.Uno (+ Interaction)
-                              |
-                          Explorer
+Core ← Data ← SignalProcessing
+Core + Data ← Charts
+Charts ← Rendering ← Interaction
+Rendering ← Rendering.Raster ← Rendering.Skia
+Interaction + Rendering.Skia ← Controls.Uno
+Charts + SignalProcessing ← Examples
+Charts ← Serialization
+Rendering ← Export
+Controls.Uno + Examples + Serialization + Export ← Explorer
 ```
 
-Core, data, chart models, geometry, interaction, fixtures, and persistence do not depend on Uno. The Skia backend does not depend on Uno. The Uno control can be hosted without the explorer. Examples are factories, not hard-coded branches inside the renderer.
+Every library is a separate NuGet project. Numerical/model/rendering/export layers have no Uno dependency. Controls.Uno targets desktop and browser WebAssembly. The package-only test consumer verifies that transitive references and browser assets survive packaging.
 
-## Model and data ownership
+## Model and data contract
 
-`XyData` and `UniformData` own their sample buffers. NaN Y values denote breaks, not interpolated points. A synchronized `RollingBuffer` owns bounded acquisition storage and returns immutable snapshots. The UI owns a `ChartDocument`, its axes, and its series. Changing a series emits document invalidation; nested `BeginUpdate` scopes coalesce notifications.
+Documents, series, axes and controllers are UI-thread-affine. A document rewires nested change subscriptions when collections change and detaches all subscriptions on disposal. Nested BeginUpdate scopes coalesce model changes into one revision/Changed event. AutoFit computes a complete candidate plan before mutating any axis, with independent stack/sign accumulators and separate spatial height/Z bounds. Category labels and pane axis bindings own their arrays.
 
-Documents/controllers are not general-purpose concurrent mutable objects. Acquire data on worker threads, then marshal source replacement to the UI thread. `ChartControl` never disposes a caller-owned document. Replacing examples in the explorer detaches the old document and then disposes it.
-
-Known lifetime and mutation limitations are tracked in the compatibility matrix. In particular, mutating a raw category array in place does not provide collection notifications; replace values under an explicit invalidation when using the current model.
+XY/uniform sources own their input buffers. RollingBuffer synchronizes producers and returns immutable snapshots for UI handoff. The line envelope index caches source extrema and preserves spikes/NaN breaks when selecting data for visible pixels. It does not reorder freeform sources. Replacing data creates a new source identity; incremental streaming GPU updates are not yet implemented.
 
 ## Frame compilation
 
-`SceneCompiler` maps a document and logical viewport size to a `RenderFrame`. The frame contains a packed vertex array and batches with ranges, clip rectangles, transforms, primitive kinds, and depth-test state. Each vertex contains XYZ, RGBA, and a surface normal (ten floats). Labels and legend hit regions are separate metadata.
+SceneCompiler caches a frame by document identity/revision and logical viewport dimensions. Layout resolves layered, stacked and segmented panes. Geometry is clipped in binary64 before conversion to packed float vertices. The common vertex layout is XYZ, RGBA, normal XYZ: ten floats / 40 bytes. Draw batches carry start/count, primitive kind, clip rectangle, depth flag, matrix and point size. Text and interaction regions remain separate metadata.
 
-Logical coordinate transforms operate in double precision. XY polygon clipping occurs before float packing. Crossing area/band boundaries are split before triangulation. Ordered line sources use weakly cached envelope indexes so rendering scales with visible screen resolution rather than total source length. Unordered source order is retained. NaN gaps are not connected, and cubic marker positions come from original samples rather than generated subdivision points.
+The compiler renders XY, circular and spatial families explicitly. Unsupported view/series/style combinations throw a descriptive exception. Original-sample hit testing queries the data source, not interpolated or decimated vertices.
 
-An unchanged document identity, revision, width, and height reuses its whole compiled frame. Consumers must treat returned arrays and metadata as immutable. The current public frame surface does not enforce deep read-only memory at every nested array boundary.
+## GPU hosts
 
-Layered axes share a plot. Stacked axes use weighted separate plots; segmented axes map several axes to the same weighted plot. Weights are normalized before summation to avoid overflowing a finite set of individually valid weights.
+Desktop uses Uno GLCanvasElement with Silk.NET. The renderer saves and restores changed shared-context state, validates shader/program creation and draws clipped triangles with depth testing and simple face lighting. A valid initial backing size avoids zero-sized initialization; subsequent backing dimensions use device pixels.
 
-## Backend adapters
+Browser uses a separate chart-owned WebGL2 context. Its JavaScript is embedded under WasmScripts in the reusable library and is emitted/loaded as a static Uno Bootstrapper asset. Global imports are qualified function names, not fictitious ES modules. Borrowed MemoryView spans are used only during synchronous calls; uploads and returned pixels are copied into owned storage.
 
-`Rendering.Skia` caches `SKVertices` for 2D geometry and fonts for labels. It handles 2D PNG export through an independent raster surface. It rejects depth-tested batches rather than pretending that a painter-order flattening is correct 3D rendering.
+The browser reads the standard RGBA/UNSIGNED_BYTE combination, reverses row order and composes a premultiplied RGBA Skia bitmap into Uno. This avoids the pinned Uno graphics host's unsupported BGRA browser readback without modifying any global WebGL/runtime function. The script validates WebGL errors and bounds allocations. Context loss is reported; explicit automatic recovery is remaining work.
 
-`ChartGlSurface` compiles vertex/fragment shaders, owns a VAO and VBO, uploads changed frames, clips each batch with scissor state, and uses depth testing for 3D. It restores the shared OpenGL state it changes. Its matrices convert the System.Numerics depth convention to OpenGL's clip convention.
+Both hosts use the same frame geometry and shader lighting. Both presentation paths currently involve readback. Neither is a zero-copy GPU compositor.
 
-`ChartControl` draws the offscreen GL surface at device resolution and maps it back to logical layout units; the Skia overlay uses logical units. It handles model invalidation, input, attachment/detachment, and rendering selection. Rendering diagnostics distinguish GL submissions, Skia overlay draws, and CPU compile time.
+## Fallback and image export
 
-The current Uno GL host performs framebuffer readback and bitmap presentation. It is not a direct GPU texture-sharing compositor integration. Adapter loss, suspension, repeated detach/reload, all native backends, and hardware performance require broader validation.
+SkiaFrameRenderer draws 2D packed triangles with SKVertices and overlays text. Its 3D path calls the reusable CPU rasterizer, which performs six-plane homogeneous clipping, reciprocal-W color interpolation, LEQUAL depth, top-left triangle coverage, scissoring and premultiplied source-over blending. Rasterization is two-sided like the GPU path. The result is cached by frame and output dimensions.
 
-## Interaction
+PNG reuses this backend at the requested export scale and includes text. SVG emits the actual clipped 2D polygons, clip paths and escaped labels; depth-tested scenes and vertex gradients are rejected. All-data CSV writes each supported model family in a stable long-form schema through a caller-owned TextWriter. The UI also retains the simple first-XY-series CSV command.
 
-`ChartInteraction` is framework-neutral. It computes viewport changes before applying them, records at most 64 history states, and turns a drag into one undo entry. A canceled gesture restores its initial viewport. Cursor queries return original data samples in screen-space distance rather than decimated representatives. The initial picker covers XY data series, not every financial/grid/mesh primitive.
+## Interaction and persistence
 
-Uno maps pointer capture, wheel, keyboard, and touch gestures to that controller. Wheel anchoring preserves the value beneath the pointer. Shift-drag selects an XY range. Vertical gestures target the pane under the pointer. Three-dimensional dragging changes camera orientation rather than reinterpreting the scene as a flat plot.
+ChartInteraction applies anchor-preserving zoom and viewport plans transactionally. Pointer drags form one history entry; cancellation restores the initial viewport. The Uno adapter handles mouse, keyboard and pinch input, selection rectangles, cursors and legend toggles. Viewport history is separate from general model/document editing history.
 
-## Persistence and imports
+ChartJson uses a versioned schema, hand-written UTF-8 JSON writing and JsonDocument reading, so no reflection-based type activation is required. Input character, numeric, series, axis and annotation limits constrain imports. Duplicate keys, invalid bindings, enums and dimensions are rejected. Import compiles the candidate chart before replacing the current document.
 
-`ChartJson` uses explicit `Utf8JsonWriter` / `JsonDocument` parsing instead of reflection-driven polymorphic activation. It supports the currently implemented series types, axes, themes, segments, annotations, and camera settings. Import budgets limit total input, numeric values, series, axes, and annotations. Duplicate keys, invalid enums, invalid models, and unknown format versions are rejected.
+## Validation and publication
 
-The explorer compiles a prospective imported document before replacing the current document. Failed imports leave the current chart attached. This catches unsupported view/series combinations in addition to structural JSON errors. The format is independent of LightningChart's persistence format and does not read its proprietary project files.
+Validate checks numerical contracts, scenes, serialization, allocation/clip/depth behavior, package inventory, isolated package consumers and current-build browser scenarios. GPU and fallback suites use identical example/input/export coverage and do not download an earlier application. Screenshots exclude legend swatches from basic geometry-presence checks. Pointer zoom assertions use the coordinates delivered by the browser.
+
+CI's graphics adapter is SwiftShader. CPU compilation timing is not GPU timing or end-to-end latency. Native desktop execution and a hardware/cross-browser conformance matrix remain separate work.
+
+A successful main push validation produces revision.json with its commit/tree. Pages downloads only that run's browser artifact and verifies the commit before deployment. Source and packages remain available as validation artifacts independently of Pages.
