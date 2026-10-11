@@ -31,6 +31,8 @@ public sealed class CatalogCard(CatalogEntry entry) : INotifyPropertyChanged
 /// thumbnail factory. No examples, files, navigation destinations or network APIs are hardcoded.</summary>
 public sealed partial class CatalogBrowserControl : UserControl, IDisposable
 {
+    public const int MaximumCachedPreviews = 32;
+    public const int MaximumPendingPreviews = 64;
     private CatalogBrowserModel? _model;
     private readonly Dictionary<string, CatalogCard> _cards = new(StringComparer.Ordinal);
     private readonly HashSet<string> _tags = new(StringComparer.OrdinalIgnoreCase);
@@ -38,10 +40,11 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
     private readonly DispatcherTimer _debounce = new() { Interval = TimeSpan.FromMilliseconds(140) };
     private readonly Queue<CatalogCard> _requests = new();
     private readonly HashSet<string> _pending = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _failed = new(StringComparer.Ordinal);
     private readonly LinkedList<CatalogCard> _previewLru = new();
     private CancellationTokenSource _cancel = new();
     private IReadOnlyList<CatalogEntry>? _lastEntries;
-    private bool _sync, _disposed, _processing;
+    private bool _sync, _disposed, _processing, _modelSubscribed;
     private int _generation;
     public CatalogBrowserModel? Model => _model;
     public CatalogEntry? SelectedEntry { get; private set; }
@@ -51,6 +54,7 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
     public FrameworkElement? EntryContainer(string id) => (IsTileView ? (ListViewBase)Tiles : List).ContainerFromItem(_cards[id]) as FrameworkElement;
     public void BringEntryIntoView(string id) => (IsTileView ? (ListViewBase)Tiles : List).ScrollIntoView(_cards[id]);
     public int CachedPreviews => _previewLru.Count;
+    public int PendingPreviews => _requests.Count;
     public int GeneratedPreviews { get; private set; }
     public int PreviewErrors { get; private set; }
     public Func<CatalogEntry, CancellationToken, Task<ImageSource?>>? PreviewProvider { get; set; }
@@ -63,15 +67,15 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
         InitializeComponent();
         _debounce.Tick += (_, _) => { _debounce.Stop(); ApplyFilter(); };
         SizeChanged += (_, _) => { var compact = ActualWidth < 850; PreviewColumn.Width = new GridLength(compact ? 0 : 300); PreviewPane.Visibility = compact ? Visibility.Collapsed : Visibility.Visible; };
-        Unloaded += (_, _) => SuspendPreviews();
-        Loaded += (_, _) => { if (_model != null) { ApplyFilter(); RefreshPreviews(); } };
+        Unloaded += (_, _) => { DetachModel(); SuspendPreviews(); };
+        Loaded += (_, _) => { if (!_disposed && _model != null) { AttachModel(); ApplyFilter(); RefreshPreviews(); } };
     }
     public void SetModel(CatalogBrowserModel model, string? selectedId = null)
     {
         ArgumentNullException.ThrowIfNull(model); ObjectDisposedException.ThrowIf(_disposed, this);
-        if (_model != null) _model.FavoritesChanged -= FavoritesChanged;
-        SuspendPreviews(); _model = model; _model.FavoritesChanged += FavoritesChanged;
-        _cards.Clear(); _previewLru.Clear(); _lastEntries = null; _tags.Clear(); _tagButtons.Clear(); TagButtons.Children.Clear();
+        DetachModel();
+        SuspendPreviews(); _model = model; if (IsLoaded) AttachModel();
+        _cards.Clear(); _previewLru.Clear(); _failed.Clear(); _lastEntries = null; _tags.Clear(); _tagButtons.Clear(); TagButtons.Children.Clear();
         foreach (var entry in model.Entries) { var card = new CatalogCard(entry); card.SetFavorite(model.IsFavorite(entry.Id)); _cards.Add(entry.Id, card); }
         _sync = true;
         Category.ItemsSource = new[] { "All examples" }.Concat(model.Categories).ToArray(); Category.SelectedIndex = 0;
@@ -106,7 +110,7 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
         foreach (var card in _cards.Values) card.SetFavorite(_model.IsFavorite(card.Id));
         if (!ReferenceEquals(entries, _lastEntries))
         {
-            _lastEntries = entries; _sync = true;
+            SuspendPreviews(); _lastEntries = entries; _sync = true;
             var cards = entries.Select(e => _cards[e.Id]).ToArray(); Tiles.ItemsSource = List.ItemsSource = cards;
             if (SelectedEntry == null || !entries.Any(e => e.Id == SelectedEntry.Id)) SelectedEntry = entries.FirstOrDefault();
             Tiles.SelectedItem = List.SelectedItem = SelectedEntry == null ? null : _cards[SelectedEntry.Id]; _sync = false;
@@ -171,7 +175,7 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
     private void ListClicked(object sender, RoutedEventArgs args) => ChangeView(false);
     public void ChangeView(bool tiles)
     {
-        IsTileView = tiles; Tiles.Visibility = tiles ? Visibility.Visible : Visibility.Collapsed; List.Visibility = tiles ? Visibility.Collapsed : Visibility.Visible;
+        SuspendPreviews(); IsTileView = tiles; Tiles.Visibility = tiles ? Visibility.Visible : Visibility.Collapsed; List.Visibility = tiles ? Visibility.Collapsed : Visibility.Visible;
         if (SelectedEntry != null) (tiles ? (ListViewBase)Tiles : List).ScrollIntoView(_cards[SelectedEntry.Id]);
         RefreshPreviews(); SelectionUpdated?.Invoke(this, EventArgs.Empty);
     }
@@ -181,13 +185,15 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
     }
     private void RequestPreview(CatalogCard? card)
     {
-        if (card == null || _disposed || PreviewProvider == null || Visibility != Visibility.Visible || !IsLoaded) return;
+        if (card == null || _disposed || PreviewProvider == null || _failed.Contains(card.Id) || Visibility != Visibility.Visible || !IsLoaded) return;
         if (card.Preview != null)
         {
             _previewLru.Remove(card); _previewLru.AddLast(card); return;
         }
-        if (!_pending.Add(card.Id)) return; _requests.Enqueue(card);
-        if (!_processing) { _processing = true; DispatcherQueue.TryEnqueue(ProcessPreviews); }
+        if (!_pending.Add(card.Id)) return;
+        while (_requests.Count >= MaximumPendingPreviews) _pending.Remove(_requests.Dequeue().Id);
+        _requests.Enqueue(card);
+        if (!_processing) { _processing = true; if (!DispatcherQueue.TryEnqueue(ProcessPreviews)) _processing = false; }
     }
     private async void ProcessPreviews()
     {
@@ -205,16 +211,39 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
                     if (image != null)
                     {
                         _previewLru.Remove(card); _previewLru.AddLast(card);
-                        while (_previewLru.Count > 32) { var first = _previewLru.First!.Value; _previewLru.RemoveFirst(); first.Preview = null; }
+                        while (_previewLru.Count > MaximumCachedPreviews)
+                        {
+                            var first = _previewLru.First!.Value; _previewLru.RemoveFirst();
+                            if (first.Id == SelectedEntry?.Id) _previewLru.AddLast(first); else first.Preview = null;
+                        }
                     }
+                    else _failed.Add(card.Id);
                     if (SelectedEntry?.Id == card.Id) SelectedImage.Source = image;
                 }
                 catch (OperationCanceledException) { }
-                catch (Exception error) { if (generation == _generation) { card.PreviewMessage = "Preview unavailable"; PreviewErrors++; Console.Error.WriteLine("Catalog preview " + card.Id + ": " + error.Message); } }
+                catch (Exception error) { if (generation == _generation) { card.PreviewMessage = "Preview unavailable"; _failed.Add(card.Id); PreviewErrors++; Console.Error.WriteLine("Catalog preview " + card.Id + ": " + error.Message); } }
                 finally { if (generation == _generation) _pending.Remove(card.Id); }
             }
         }
         finally { _processing = false; }
+    }
+    private void AttachModel()
+    {
+        if (_modelSubscribed || _model == null) return;
+        _model.FavoritesChanged += FavoritesChanged; _modelSubscribed = true;
+    }
+    private void DetachModel()
+    {
+        if (_modelSubscribed && _model != null) _model.FavoritesChanged -= FavoritesChanged;
+        _modelSubscribed = false;
+    }
+    /// <summary>Clear thumbnail cache and retry prior failures after changing the host's provider/data.
+    /// Call on the UI thread. Filtering and view changes retain successful cached images.</summary>
+    public void InvalidatePreviews()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this); SuspendPreviews(); _previewLru.Clear(); _failed.Clear();
+        foreach (var card in _cards.Values) { card.Preview = null; card.PreviewMessage = "Preparing preview…"; }
+        SelectedImage.Source = null; RefreshPreviews();
     }
     public void SuspendPreviews()
     {
@@ -223,7 +252,7 @@ public sealed partial class CatalogBrowserControl : UserControl, IDisposable
     public new void Dispose()
     {
         if (_disposed) return; _disposed = true; SuspendPreviews(); _cancel.Dispose();
-        if (_model != null) _model.FavoritesChanged -= FavoritesChanged;
+        DetachModel();
         Tiles.ItemsSource = List.ItemsSource = null; _cards.Clear(); _previewLru.Clear(); SelectedImage.Source = null; _model = null;
     }
 }

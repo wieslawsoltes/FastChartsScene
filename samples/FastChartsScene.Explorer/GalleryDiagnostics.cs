@@ -14,7 +14,7 @@ using System.Runtime.InteropServices.JavaScript;
 namespace FastChartsScene.Explorer;
 
 public sealed record GallerySnapshot(bool Open, bool Tiles, string Query, string? Selected, string[] Visible, string[] Favorites,
-    long FilterPasses, int CachedPreviews, int GeneratedPreviews, int PreviewErrors, double Width, double Height);
+    long FilterPasses, int CachedPreviews, int PendingPreviews, int GeneratedPreviews, int PreviewErrors, double Width, double Height);
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(GallerySnapshot))]
 internal partial class GalleryJsonContext : JsonSerializerContext { }
@@ -29,7 +29,7 @@ public static partial class BrowserBridge
         var page = Page ?? throw new InvalidOperationException("Explorer not initialized."); var gallery = page.Gallery; var model = gallery.Model!;
         return JsonSerializer.Serialize(new GallerySnapshot(page.GalleryIsOpen, gallery.IsTileView, gallery.SearchText, gallery.SelectedEntry?.Id,
             gallery.VisibleIds.ToArray(), model.Entries.Where(e => model.IsFavorite(e.Id)).Select(e => e.Id).ToArray(), model.FilterPasses,
-            gallery.CachedPreviews, gallery.GeneratedPreviews, gallery.PreviewErrors, gallery.ActualWidth, gallery.ActualHeight), GalleryJsonContext.Default.GallerySnapshot);
+            gallery.CachedPreviews, gallery.PendingPreviews, gallery.GeneratedPreviews, gallery.PreviewErrors, gallery.ActualWidth, gallery.ActualHeight), GalleryJsonContext.Default.GallerySnapshot);
     }
     private static FrameworkElement GalleryControl(string name)
     {

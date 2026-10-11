@@ -32,7 +32,7 @@
             </Grid>
         </DataTemplate>
     </UserControl.Resources>
-    <Grid Padding="16,12,16,8" RowSpacing="10">
+    <Grid Background="#303030" Padding="16,12,16,8" RowSpacing="10">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <Grid ColumnSpacing="8">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

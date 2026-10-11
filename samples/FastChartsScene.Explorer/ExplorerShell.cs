@@ -119,7 +119,8 @@ public sealed partial class ExplorerPage
         byte[] bytes; using (var renderer = new SkiaFrameRenderer()) bytes = renderer.ExportPng(frame, .5);
         compiler.ClearCache(); cancellation.ThrowIfCancellationRequested();
         using var stream = new InMemoryRandomAccessStream();
-        using (var writer = new DataWriter(stream)) { writer.WriteBytes(bytes); await writer.StoreAsync(); writer.DetachStream(); }
+        // Keep the writer alive until decoding completes; this Uno target does not implement DetachStream.
+        using var writer = new DataWriter(stream); writer.WriteBytes(bytes); await writer.StoreAsync();
         stream.Seek(0); var image = new BitmapImage(); await image.SetSourceAsync(stream); cancellation.ThrowIfCancellationRequested(); return image;
     }
     private void UpdateExampleHeader()
