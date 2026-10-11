@@ -16,7 +16,8 @@ public sealed class IntensityScaleEditor : UserControl, IDisposable
         new PropertyMetadata(null, (sender, args) => ((IntensityScaleEditor)sender).ReplaceSeries((HeatmapSeries?)args.OldValue, (HeatmapSeries?)args.NewValue)));
     public HeatmapSeries? Series { get => (HeatmapSeries?)GetValue(SeriesProperty); set => SetValue(SeriesProperty, value); }
     public string? LastError { get; private set; }
-    private bool _sync, _attached, _disposed;
+    private bool _sync, _attached, _disposed, _applying;
+    private ColorMap? _listedPalette;
     private readonly StackPanel _panel = new() { Spacing = 9 };
     private readonly ComboBox _palette = new() { Header = "Palette", HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly ComboBox _interpolation = new() { Header = "Palette interpolation", ItemsSource = Enum.GetValues<ColorInterpolation>(), HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -74,7 +75,7 @@ public sealed class IntensityScaleEditor : UserControl, IDisposable
     }
     private static ColorMap ParseStops(string text, ColorInterpolation interpolation)
     {
-        var lines = text.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var lines = text.Split(['\r', '\n'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         if (lines.Length > ColorMap.MaximumStops) throw new FormatException("A palette supports at most 256 stops.");
         var stops = lines.Select(line =>
         {
@@ -89,8 +90,12 @@ public sealed class IntensityScaleEditor : UserControl, IDisposable
     private void Apply(Action action)
     {
         if (_sync || _disposed || Series == null) return;
-        try { action(); LastError = null; } catch (Exception error) when (error is ArgumentException or FormatException or OverflowException) { LastError = error.Message; }
-        Refresh();
+        _applying = true;
+        try { action(); LastError = null; }
+        catch (Exception error) when (error is ArgumentException or FormatException or OverflowException) { LastError = error.Message; }
+        finally { _applying = false; }
+        // Retain invalid draft text/ranges so users can correct them, rather than losing their edit.
+        if (LastError == null) Refresh(); else ShowError();
     }
     private void ReplaceSeries(HeatmapSeries? old, HeatmapSeries? current)
     {
@@ -98,18 +103,27 @@ public sealed class IntensityScaleEditor : UserControl, IDisposable
         if (_attached && current != null) current.PropertyChanged += ModelChanged;
         LastError = null; Refresh();
     }
-    private void ModelChanged(object? sender, PropertyChangedEventArgs args) => Refresh();
+    private void ModelChanged(object? sender, PropertyChangedEventArgs args) { if (!_applying) Refresh(); }
+    private void ShowError()
+    {
+        _error.Text = LastError ?? ""; _error.Visibility = LastError == null ? Visibility.Collapsed : Visibility.Visible;
+    }
     private void Refresh()
     {
         if (_sync || _disposed) return; _sync = true;
         try
         {
-            IsEnabled = Series != null; _error.Text = LastError ?? ""; _error.Visibility = LastError == null ? Visibility.Collapsed : Visibility.Visible;
+            IsEnabled = Series != null; ShowError();
             if (Series is not { } series) return;
             var scale = series.ColorScale; var resolved = series.ResolveColorScale();
             var preset = ColorMap.Presets.FirstOrDefault(p => p.Stops.SequenceEqual(scale.Palette.Stops));
-            _palette.ItemsSource = preset == null ? ColorMap.Presets.Append(scale.Palette).ToArray() : ColorMap.Presets;
-            _palette.SelectedItem = preset ?? scale.Palette; _interpolation.SelectedItem = scale.Palette.Interpolation;
+            var selected = preset ?? scale.Palette;
+            if (!ReferenceEquals(_listedPalette, selected))
+            {
+                _palette.ItemsSource = preset == null ? ColorMap.Presets.Append(scale.Palette).ToArray() : ColorMap.Presets;
+                _listedPalette = selected;
+            }
+            _palette.SelectedItem = selected; _interpolation.SelectedItem = scale.Palette.Interpolation;
             _mode.SelectedItem = scale.Mode; _outside.SelectedItem = scale.OutOfRange; _reversed.IsChecked = scale.Reversed;
             _automatic.IsChecked = scale.Range == null; _bar.IsChecked = series.ShowColorBar;
             _minimum.IsEnabled = _maximum.IsEnabled = _applyRange.IsEnabled = scale.Range != null;

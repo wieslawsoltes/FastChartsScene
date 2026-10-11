@@ -39,12 +39,12 @@ export function intensityInput(page,state){
   const b=await bounds(name);await page.mouse.click(b.x+b.width/2,b.y+b.height-18);
   await page.waitForFunction(()=>['INPUT','TEXTAREA'].includes(document.activeElement?.tagName));
   await page.keyboard.press('Control+a');
-  const lines=value.replaceAll('\r','').split('\n');
+  const lines=value.replace(/\r\n|\r/g,'\n').split('\n');
   for(let i=0;i<lines.length;i++){if(i>0)await page.keyboard.press('Enter');await page.keyboard.insertText(lines[i]);}
   await page.keyboard.press('Tab');
   const delivered=await page.evaluate(n=>globalThis.chartBridge.IntensityControlText(n),name);
   console.log('INTENSITY INPUT',JSON.stringify({name,expected:value,delivered}));
-  if(delivered.replaceAll('\r','')!==value.replaceAll('\r',''))throw new Error('Input delivery mismatch for '+name+': '+JSON.stringify({expected:value,delivered}));
+  if(delivered.replace(/\r\n|\r/g,'\n')!==value.replace(/\r\n|\r/g,'\n'))throw new Error('Input delivery mismatch for '+name+': '+JSON.stringify({expected:value,delivered}));
  }
  return {click,selectOption,input};
 }
