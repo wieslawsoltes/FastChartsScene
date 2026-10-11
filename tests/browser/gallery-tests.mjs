@@ -26,7 +26,7 @@ export async function validateGallery(page,{inspect,scenario,output}){
  async function home(){await toolbar('Back to gallery');await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectGallery()).open);}
  await scenario('gallery: reference-style tiles display real cached chart previews',async()=>{
   await home();await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectGallery()).generatedPreviews>=3,undefined,{timeout:90000});
-  const s=await state();assert.equal(s.visible.length,31);assert(s.cachedPreviews<=32);assert.equal(s.previewErrors,0);
+  const s=await state();assert.equal(s.visible.length,31);assert(s.cachedPreviews<=32);assert(s.pendingPreviews<=64);assert.equal(s.previewErrors,0);
   await page.screenshot({path:resolve(output,'gallery-tiles.png'),scale:'css'});return s;
  });
  await scenario('gallery: keyword AND search and quoted phrases filter the catalog',async()=>{
@@ -71,7 +71,7 @@ export async function validateGallery(page,{inspect,scenario,output}){
   await toolbar('Start acquisition');await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.Inspect()).streaming);
   await home();assert.equal((await inspect()).streaming,false);
   const first=await state();await click('Open example');await page.waitForFunction(()=>!JSON.parse(globalThis.chartBridge.InspectGallery()).open);await home();
-  const next=await state();assert(next.cachedPreviews<=32);assert(next.generatedPreviews<=first.generatedPreviews+2);assert.equal(next.previewErrors,0);
+  const next=await state();assert(next.cachedPreviews<=32);assert(next.pendingPreviews<=64);assert(next.generatedPreviews<=first.generatedPreviews+2);assert.equal(next.previewErrors,0);
  });
  await scenario('gallery: project extraction downloads the current edited standalone chart',async()=>{
   await entry('surface');await click('Open example');await page.waitForFunction(()=>!JSON.parse(globalThis.chartBridge.InspectGallery()).open);
