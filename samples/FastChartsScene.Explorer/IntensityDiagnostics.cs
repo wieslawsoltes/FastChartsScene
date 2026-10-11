@@ -80,6 +80,15 @@ public static partial class BrowserBridge
 #if __WASM__
     [JSExport]
 #endif
+    public static string IntensityControlText(string name) => IntensityControl(name) switch
+    {
+        TextBox text => text.Text,
+        NumberBox number => number.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+        _ => throw new ArgumentException("Not a text or numeric input: " + name)
+    };
+#if __WASM__
+    [JSExport]
+#endif
     public static string IntensityControlBounds(string name)
     {
         var element = IntensityControl(name); var point = element.TransformToVisual(null).TransformPoint(new Point(0, 0));
