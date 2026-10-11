@@ -24,11 +24,16 @@ jobs:
         run: |
           mkdir -p artifacts
           dotnet run --project tests/FastChartsScene.Tests -c Release 2>&1 | tee artifacts/core-tests.txt
+      - name: Measure CPU hot paths against equivalent baselines
+        run: dotnet run --project tests/FastChartsScene.Benchmarks -c Release -- artifacts/performance.json 2>&1 | tee artifacts/performance.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: core-results
-          path: artifacts/core-tests.txt
+          path: |
+            artifacts/core-tests.txt
+            artifacts/performance.json
+            artifacts/performance.txt
   uno:
     runs-on: ubuntu-latest
     timeout-minutes: 30

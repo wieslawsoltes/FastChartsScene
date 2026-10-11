@@ -42,6 +42,12 @@ export function intensityInput(page,state){
   const lines=value.replace(/\r\n|\r/g,'\n').split('\n');
   for(let i=0;i<lines.length;i++){if(i>0)await page.keyboard.press('Enter');await page.keyboard.insertText(lines[i]);}
   await page.keyboard.press('Tab');
+  // NumberBox commits its Value through queued focus processing. Wait for the actual
+  // managed value after Tab, rather than mistaking the previous value for lost input.
+  await page.waitForFunction(([n,expected])=>{
+   const normalize=s=>s.replace(/\r\n|\r/g,'\n');
+   return normalize(globalThis.chartBridge.IntensityControlText(n))===normalize(expected);
+  },[name,value],{timeout:5000});
   const delivered=await page.evaluate(n=>globalThis.chartBridge.IntensityControlText(n),name);
   console.log('INTENSITY INPUT',JSON.stringify({name,expected:value,delivered}));
   if(delivered.replace(/\r\n|\r/g,'\n')!==value.replace(/\r\n|\r/g,'\n'))throw new Error('Input delivery mismatch for '+name+': '+JSON.stringify({expected:value,delivered}));
