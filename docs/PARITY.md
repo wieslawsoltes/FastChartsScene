@@ -6,10 +6,10 @@ This is an implementation inventory, not a claim of full LightningChart .NET par
 | --- | --- | --- |
 | Axes | Linear/log/date/category transforms; calendar month/year and time-of-day intervals; inversion; layered/stacked/segmented panes; stable adjacent-value logarithms; owned category/segment arrays | Scale breaks, custom labels/ticks, complete multi-axis placement/editing and original semantics |
 | XY lines | Sampled/point lines, scatter, steps, monotone cubic, markers, gaps, area baseline | All line/marker styles, dashes, per-point styles, spline families, joins/caps and original API |
-| Data | Immutable sources, synchronized rolling snapshots, ordered searches, interpolation, extrema/gap-preserving screen reduction | Incremental GPU uploads, zero-copy source APIs, additional retention modes and sustained-load guarantees |
+| Data | Immutable sources, single-copy synchronized rolling snapshots, bulk FIFO append, ordered searches, interpolation, extrema/gap-preserving screen reduction | Incremental GPU uploads, zero-copy source APIs, additional retention modes and sustained-load guarantees |
 | Bars/ranges | Positive/negative stacks, groups, horizontal bars, bands, asymmetric errors; atomic fit includes totals, widths and uncertainty | All grouping/range styles, per-series editing and original APIs |
 | Financial | Candlestick/OHLC; SMA/EMA/RSI/Bollinger calculations; all-series data export | Full financial tools/indicators, market calendars, finance-specific picking/editing |
-| Intensity | Regular heatmaps/contours, immutable custom gradient/stepped palettes, linear/log automatic or manual color ranges, reversal, missing/outlier colors, pane-aware colorbars, reusable Uno editor, exact regular heatmap cell picking, persisted settings | GPU scalar textures, bilinear/per-fragment scalar mapping, irregular grids, contour/spatial picking and data editing; complete original palette/colorbar API |
+| Intensity | Regular heatmaps/contours, immutable custom gradient/stepped palettes, linear/log automatic or manual color ranges, reversal, missing/outlier colors, pane-aware colorbars, reusable Uno editor, exact regular heatmap cell picking, viewport culling, shared scalar statistics, cached contour topology, persisted settings | GPU scalar textures, bilinear/per-fragment scalar mapping, irregular grids, contour/spatial picking and data editing; complete original palette/colorbar API |
 | Polar/Smith | Linear unfilled curves and graticules | All series styles, annotations, clipping and navigation compatibility |
 | 3D | Lit surfaces, waterfalls, bars, points/lines, meshes/OBJ; correct spatial fit; depth-correct CPU fallback and PNG | Volume rendering, complete spatial families, translucent sorting, spatial picking/slicing, full axes/annotations |
 | Pie | Extruded pie/doughnut, height, explosion, JSON/CSV/PNG | Slice labels/legends, complete picking/layout/style behavior |
@@ -18,7 +18,7 @@ This is an implementation inventory, not a claim of full LightningChart .NET par
 | Annotations | XY text, horizontal/vertical lines and rectangles | Interactive editing, complete annotation set, circular/spatial annotations |
 | Persistence | Versioned bounded JSON for every current model; exact data/style roundtrip, duplicate-key checks | LightningChart file compatibility, stable external series IDs, future-version migrations |
 | Export | 2D/3D PNG, clipped 2D SVG, first-series and complete-model CSV, chart JSON, frame metadata | 3D vector formats, PDF/document/print/clipboard integration and original export API |
-| Rendering | Packed common geometry, native GL, browser-owned WebGL2/RGBA composition, Skia vectors/text and CPU depth renderer | Zero-copy GPU composition, WebGPU/Vulkan/D3D/Metal backends, device-loss recovery, AA/style and cross-device conformance |
+| Rendering | Packed common geometry, native GL, browser-owned WebGL2/RGBA composition, reusable upload capacity, browser loss/restoration recovery, Skia vectors/text and CPU depth renderer | Zero-copy GPU composition, WebGPU/Vulkan/D3D/Metal backends, native device-loss recovery, AA/style and cross-device conformance |
 | Explorer | 31 fixtures, searchable gallery, inspector and reusable intensity editor, synthetic acquisition, document and export commands | Exact reference application visual comparison, all original explorer examples/features |
 | Packaging | Twelve reusable libraries, implementation inventory and isolated desktop/browser NuGet consumer | Public-feed releases, expanded API stability/compatibility testing |
 | Deployment | Desktop/browser builds and validated-artifact Pages workflow | Confirm each deployment independently; native runtime/hardware acceptance |
@@ -46,3 +46,7 @@ Color scale/colorbar fields are additive to the version-1 saved document. Older 
 ## Acceptance criteria for full parity
 
 Full parity requires a specified reference version and exhaustive API/property inventory, original application visual references, numerical contracts and representative datasets, interaction scripts covering each control/property, and native/browser hardware performance measurements. Remaining entries above are open work, not implemented placeholders.
+
+## Performance review
+
+[PERFORMANCE.md](PERFORMANCE.md) records fixes, allocation and cache regressions, CPU measurements, WebGL recovery tests and remaining review boundaries. Measured CPU hot-path improvements are not hardware-GPU or full-product performance parity.

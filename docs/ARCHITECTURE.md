@@ -46,7 +46,7 @@ Desktop uses Uno GLCanvasElement with Silk.NET. The renderer saves and restores 
 
 Browser uses a separate chart-owned WebGL2 context. Its JavaScript is embedded under WasmScripts in the reusable library and is emitted/loaded as a static Uno Bootstrapper asset. Global imports are qualified function names, not fictitious ES modules. Borrowed MemoryView spans are used only during synchronous calls; uploads and returned pixels are copied into owned storage.
 
-The browser reads the standard RGBA/UNSIGNED_BYTE combination, reverses row order and composes a premultiplied RGBA Skia bitmap into Uno. This avoids the pinned Uno graphics host's unsupported BGRA browser readback without modifying any global WebGL/runtime function. The script validates WebGL errors and bounds allocations. Context loss is reported; explicit automatic recovery is remaining work.
+The browser reads the standard RGBA/UNSIGNED_BYTE combination, reverses row order and composes a premultiplied RGBA Skia bitmap into Uno. This avoids the pinned Uno graphics host's unsupported BGRA browser readback without modifying any global WebGL/runtime function. The script validates WebGL errors and bounds allocations. Browser context loss queues a managed transition to fallback. Restoration recreates GL resources, invalidates uploaded/drawn frame identities and redraws the latest document; lifecycle generation guards discard stale callbacks. Native-context recovery remains separate work.
 
 Both hosts use the same frame geometry and shader lighting. Both presentation paths currently involve readback. Neither is a zero-copy GPU compositor.
 
@@ -69,3 +69,7 @@ Validate checks numerical contracts, scenes, serialization, allocation/clip/dept
 CI's graphics adapter is SwiftShader. CPU compilation timing is not GPU timing or end-to-end latency. Native desktop execution and a hardware/cross-browser conformance matrix remain separate work.
 
 A successful main push validation produces revision.json with its commit/tree. Pages downloads only that run's browser artifact and verifies the commit before deployment. Source and packages remain available as validation artifacts independently of Pages.
+
+## Reviewed hot paths
+
+`IntensityViewport` resolves visible row/column spans before heatmap emission; `ScalarGrid.Statistics` shares immutable calibration extents. Contour topology is weak-keyed by series and invalidated by grid/level identities, so view/style changes only reproject geometry. FIFO snapshots own a single copied sample array. Browser staging/VBO capacity is retained and updated with bufferSubData. See [PERFORMANCE.md](PERFORMANCE.md) for regressions, measurements and explicit limitations.

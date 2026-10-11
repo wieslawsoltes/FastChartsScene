@@ -60,7 +60,7 @@ internal sealed partial class ChartGlSurface : SKCanvasElement
     }
     protected override void RenderOverride(SKCanvas canvas,Size area)
     {
-        if(!_contextCreated||Frame is not { } frame||area.Width<1||area.Height<1) return;
+        if(!_contextCreated||IsGLInitialized != true||Frame is not { } frame||area.Width<1||area.Height<1) return;
         try
         {
             var width=checked((int)Math.Ceiling(area.Width)); var height=checked((int)Math.Ceiling(area.Height));
