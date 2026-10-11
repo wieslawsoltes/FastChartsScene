@@ -111,12 +111,21 @@ public static class GeometryAlgorithms
             if(count==2) segments.Add(new(hits[0],hits[1],level));
             else if(count==4)
             {
-                var determinant=(v[0]-level)*(v[2]-level)-(v[1]-level)*(v[3]-level);
-                if(!double.IsFinite(determinant))
+                var d0=v[0]-level; var d1=v[1]-level; var d2=v[2]-level; var d3=v[3]-level;
+                var determinant=d0*d2-d1*d3;
+                if(!double.IsFinite(determinant)||determinant==0)
                 {
-                    var magnitude=Math.Max(Math.Abs(level),Math.Max(Math.Max(Math.Abs(v[0]),Math.Abs(v[1])),Math.Max(Math.Abs(v[2]),Math.Abs(v[3]))));
-                    var l=level/magnitude;
-                    determinant=(v[0]/magnitude-l)*(v[2]/magnitude-l)-(v[1]/magnitude-l)*(v[3]/magnitude-l);
+                    // Normalize finite differences, not absolute values: this retains
+                    // narrow offsets around large baselines and recovers underflowed products.
+                    var magnitude=Math.Max(Math.Max(Math.Abs(d0),Math.Abs(d1)),Math.Max(Math.Abs(d2),Math.Abs(d3)));
+                    if(double.IsFinite(magnitude)&&magnitude>0)
+                        determinant=(d0/magnitude)*(d2/magnitude)-(d1/magnitude)*(d3/magnitude);
+                    else
+                    {
+                        magnitude=Math.Max(Math.Abs(level),Math.Max(Math.Max(Math.Abs(v[0]),Math.Abs(v[1])),Math.Max(Math.Abs(v[2]),Math.Abs(v[3]))));
+                        var l=level/magnitude;
+                        determinant=(v[0]/magnitude-l)*(v[2]/magnitude-l)-(v[1]/magnitude-l)*(v[3]/magnitude-l);
+                    }
                 }
                 if(determinant>=0) { segments.Add(new(hits[0],hits[1],level)); segments.Add(new(hits[2],hits[3],level)); }
                 else { segments.Add(new(hits[0],hits[3],level)); segments.Add(new(hits[1],hits[2],level)); }

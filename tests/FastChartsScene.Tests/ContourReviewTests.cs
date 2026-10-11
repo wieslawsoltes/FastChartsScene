@@ -29,6 +29,18 @@ internal static partial class Program
             foreach(var line in lines) True((line.A.X==.5||line.A.Y==.5)&&(line.B.X==.5||line.B.Y==.5));
             Throws<ArgumentOutOfRangeException>(()=>GeometryAlgorithms.Contours(grid,[double.NaN]));
         });
+        Add("contour saddle connectivity survives underflow and large common baselines", () => {
+            static void Compare(ScalarGrid source,double level,ScalarGrid expected)
+            {
+                var a=GeometryAlgorithms.Contours(source,[level]); var b=GeometryAlgorithms.Contours(expected,[0]);
+                Equal(b.Count,a.Count);
+                for(var i=0;i<a.Count;i++) { Equal(b[i].A.X,a[i].A.X); Equal(b[i].A.Y,a[i].A.Y); Equal(b[i].B.X,a[i].B.X); Equal(b[i].B.Y,a[i].B.Y); }
+            }
+            var expected=new ScalarGrid(2,2,0,1,0,1,[2,-3,-3,2]);
+            Compare(new(2,2,0,1,0,1,[2e-250,-3e-250,-3e-250,2e-250]),0,expected);
+            var level=1e300; var step=Math.BitIncrement(level)-level;
+            Compare(new(2,2,0,1,0,1,[level+2*step,level-3*step,level-3*step,level+2*step]),level,expected);
+        });
         Add("allocation-free contour cells preserve the previous finite marching-squares output", () => {
             var random=new Random(2957);
             for(var trial=0;trial<20;trial++)
