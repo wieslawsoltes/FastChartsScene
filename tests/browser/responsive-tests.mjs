@@ -10,9 +10,16 @@ export async function validateCompactActions(page,inspect,scenario,image){
   await page.mouse.click(bounds.x+bounds.width/2,bounds.y+bounds.height/2);
  }
  await scenario('compact examples menu supports keyboard selection',async()=>{
+  const before=await inspect();
   await click('Examples');await page.waitForFunction(()=>globalThis.chartBridge.CompactExamplesIsOpen());
   await page.keyboard.press('Home');await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
-  await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.Inspect()).example==='streaming');
+  // Changing the selection replaces the document immediately, but frame compilation is queued.
+  // Wait for the new frame and presentation, not merely the new example ID or a fixed delay.
+  await page.waitForFunction(previous=>{
+   const state=JSON.parse(globalThis.chartBridge.Inspect());
+   const rendered=state.backend.startsWith('OpenGL')?state.gpuSubmissions>previous.gpuSubmissions:state.overlayDraws>previous.overlayDraws;
+   return state.example==='streaming'&&state.vertices>0&&state.plot.width>0&&rendered&&!globalThis.chartBridge.CompactExamplesIsOpen();
+  },before);
   await image('mobile-example-picker');
  });
  await scenario('compact inspector opens and returns to the chart',async()=>{
