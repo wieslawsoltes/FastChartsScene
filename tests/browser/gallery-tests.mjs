@@ -2,28 +2,62 @@ import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
 import {readFile} from 'node:fs/promises';
 import {execFileSync} from 'node:child_process';
+import {PNG} from 'pngjs';
 
 export async function validateGallery(page,{inspect,scenario,output}){
  const state=()=>page.evaluate(()=>JSON.parse(globalThis.chartBridge.InspectGallery()));
  const frames=()=>page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
- async function click(name){
-  await page.evaluate(n=>globalThis.chartBridge.BringGalleryControlIntoView(n),name);await frames();
-  const b=await page.evaluate(n=>JSON.parse(globalThis.chartBridge.GalleryControlBounds(n)),name);
-  assert(b.width>0&&b.height>0);await page.mouse.click(b.x+b.width/2,b.y+b.height/2);
+ async function stableBounds(read,label){
+  const deadline=Date.now()+10000;let previous=null,stableSince=0,last;
+  while(Date.now()<deadline){
+   await frames();last=await read();
+   const viewport=page.viewportSize();
+   const visible=last&&last.width>1&&last.height>1&&last.x>=0&&last.y>=0&&last.x+last.width<=viewport.width+1&&last.y+last.height<=viewport.height+1;
+   const same=visible&&previous&&['x','y','width','height'].every(k=>Math.abs(last[k]-previous[k])<.1);
+   if(!same)stableSince=Date.now();
+   if(same&&Date.now()-stableSince>=200)return last;
+   previous=visible?last:null;
+  }
+  throw new Error(label+' did not reach stable visible bounds: '+JSON.stringify(last));
  }
- async function toolbar(title){const b=await page.evaluate(t=>JSON.parse(globalThis.chartBridge.ActionBounds(t)),title);await page.mouse.click(b.x+b.width/2,b.y+b.height/2);}
+ async function click(name){
+  await page.evaluate(n=>globalThis.chartBridge.BringGalleryControlIntoView(n),name);
+  const b=await stableBounds(()=>page.evaluate(n=>JSON.parse(globalThis.chartBridge.GalleryControlBounds(n)),name),name);
+  await page.mouse.click(b.x+b.width/2,b.y+b.height/2);
+ }
+ async function toolbar(title){
+  const b=await stableBounds(()=>page.evaluate(t=>JSON.parse(globalThis.chartBridge.ActionBounds(t)),title),title);
+  await page.mouse.click(b.x+b.width/2,b.y+b.height/2);
+ }
+ async function option(name,value){
+  await click(name);await page.waitForFunction(n=>globalThis.chartBridge.GalleryDropDownIsOpen(n),name);
+  const b=await stableBounds(()=>page.evaluate(([n,v])=>{const text=globalThis.chartBridge.GalleryOptionBounds(n,v);return text?JSON.parse(text):null;},[name,value]),name+' option '+value);
+  await page.mouse.click(b.x+b.width/2,b.y+b.height/2);await page.waitForFunction(n=>!globalThis.chartBridge.GalleryDropDownIsOpen(n),name);
+ }
+ async function paintedGallery(){
+  // Visibility changes precede the Skia composition pass. Require the actual opaque
+  // root pixels, not a fixed delay or a managed flag, before capturing gallery evidence.
+  const deadline=Date.now()+10000;
+  while(Date.now()<deadline){
+   await frames();const png=PNG.sync.read(await page.screenshot({scale:'css'}));
+   const at=(200*png.width+5)*4;
+   if(png.data[at]===48&&png.data[at+1]===48&&png.data[at+2]===48)return;
+   await page.waitForTimeout(50);
+  }
+  throw new Error('Gallery root was not painted opaque charcoal over the chart');
+ }
  async function query(text){
+  const before=await state();
   await click('Search examples');await page.waitForFunction(()=>['INPUT','TEXTAREA'].includes(document.activeElement?.tagName));
   await page.keyboard.press('Control+a');await page.keyboard.insertText(text);await page.keyboard.press('Tab');
-  await page.waitForFunction(t=>JSON.parse(globalThis.chartBridge.InspectGallery()).query===t,text);await page.waitForTimeout(200);
+  await page.waitForFunction(([text,previous])=>{const s=JSON.parse(globalThis.chartBridge.InspectGallery());return s.query===text&&s.filterPasses>previous;},[text,before.filterPasses],{timeout:10000});
  }
  async function entry(id){
-  await page.evaluate(id=>globalThis.chartBridge.BringGalleryEntryIntoView(id),id);await frames();
-  await page.waitForFunction(id=>!!globalThis.chartBridge.GalleryEntryBounds(id),id);
-  const b=await page.evaluate(id=>JSON.parse(globalThis.chartBridge.GalleryEntryBounds(id)),id);
+  await page.evaluate(id=>globalThis.chartBridge.BringGalleryEntryIntoView(id),id);
+  const b=await stableBounds(()=>page.evaluate(id=>{const text=globalThis.chartBridge.GalleryEntryBounds(id);return text?JSON.parse(text):null;},id),'entry '+id);
   await page.mouse.click(b.x+b.width/2,b.y+b.height-15);await page.waitForFunction(id=>JSON.parse(globalThis.chartBridge.InspectGallery()).selected===id,id);
  }
- async function home(){await toolbar('Back to gallery');await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectGallery()).open);}
+ async function home(){await toolbar('Back to gallery');await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectGallery()).open);await paintedGallery();}
  await scenario('gallery: reference-style tiles display real cached chart previews',async()=>{
   await home();await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectGallery()).generatedPreviews>=3,undefined,{timeout:90000});
   const s=await state();assert.equal(s.visible.length,31);assert(s.cachedPreviews<=32);assert(s.pendingPreviews<=64);assert.equal(s.previewErrors,0);
@@ -40,9 +74,14 @@ export async function validateGallery(page,{inspect,scenario,output}){
   const before=(await inspect()).revision;
   await click('Tag 3D');await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectGallery()).visible.length===7);
   assert((await state()).visible.includes('surface'));await click('Tag FFT');await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectGallery()).visible.length===0);
-  await click('Tag matching');await page.keyboard.press('End');await page.keyboard.press('Enter');
+  await option('Tag matching','Match any');
   await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectGallery()).visible.length===9);
   assert.equal((await inspect()).revision,before);await click('Clear search');
+ });
+ await scenario('gallery: category popup filters with real pointer selection',async()=>{
+  await option('Example category','Financial');await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectGallery()).visible.length===2);
+  assert.deepEqual((await state()).visible,['financial','ohlc']);await click('Clear search');
+  await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectGallery()).visible.length===31);
  });
  await scenario('gallery: list view preserves selection and opens using the keyboard',async()=>{
   await click('List view');await entry('surface');assert.equal((await state()).tiles,false);

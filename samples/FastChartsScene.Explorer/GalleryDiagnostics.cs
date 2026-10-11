@@ -41,6 +41,19 @@ public static partial class BrowserBridge
         }
         return (FrameworkElement?)Find(Page!.Gallery) ?? throw new ArgumentException("Gallery control not found: " + name);
     }
+#if __WASM__
+    [JSExport]
+#endif
+    public static bool GalleryDropDownIsOpen(string name) => GalleryControl(name) is ComboBox { IsDropDownOpen: true };
+#if __WASM__
+    [JSExport]
+#endif
+    public static string GalleryOptionBounds(string name, string value)
+    {
+        if (GalleryControl(name) is not ComboBox combo || !combo.IsDropDownOpen) return "";
+        var index = combo.Items.IndexOf(value);
+        return index >= 0 && combo.ContainerFromIndex(index) is FrameworkElement { ActualWidth: > 0, ActualHeight: > 0 } item ? Bounds(item) : "";
+    }
     private static string Bounds(FrameworkElement element)
     {
         var p = element.TransformToVisual(null).TransformPoint(new Point(0, 0));
