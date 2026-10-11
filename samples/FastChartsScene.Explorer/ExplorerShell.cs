@@ -87,6 +87,7 @@ public sealed partial class ExplorerPage
         toolbar.Children.Add(Button("Frame JSON", () => Export("json")));
         toolbar.Children.Add(Button("Inspector", () => { if (ActualWidth >= 1100) { _inspectorVisible = !_inspectorVisible; Responsive(); } }));
         toolbar.Children.Add(Button("Details", () => { _detailsVisible = !_detailsVisible; Responsive(); }));
+        toolbar.Children.Add(Button("Extract project", () => Export("project")));
         foreach (var button in toolbar.Children.OfType<Button>())
         { button.MinHeight = 27; button.Padding = new Thickness(8, 3, 8, 3); button.FontSize = 11; button.CornerRadius = new CornerRadius(1); button.Foreground = Brush("F2CC00"); ToolTipService.SetToolTip(button, button.Content); }
         _toolbarScroll = new ScrollViewer { Content = toolbar, Background = Brush("454545"), HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollMode = ScrollMode.Disabled };

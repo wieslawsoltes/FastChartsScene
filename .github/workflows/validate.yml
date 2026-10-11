@@ -76,6 +76,14 @@ jobs:
         run: |
           dotnet build tests/PackageConsumer -c Release -f net10.0-desktop 2>&1 | tee artifacts/package-consumer-desktop.txt
           dotnet build tests/PackageConsumer -c Release -f net10.0-browserwasm 2>&1 | tee artifacts/package-consumer-browser.txt
+      - name: Build extracted standalone project against packages
+        if: steps.pack.outcome == 'success'
+        run: |
+          dotnet run --project tests/ProjectExportConsumer -c Release -- artifacts/extracted-project.zip
+          unzip -q artifacts/extracted-project.zip -d artifacts/extracted-project
+          cp artifacts/packages/*.nupkg artifacts/extracted-project/packages/
+          dotnet build artifacts/extracted-project/ExtractedChart.csproj -c Release -f net10.0-desktop 2>&1 | tee artifacts/extracted-desktop.txt
+          dotnet build artifacts/extracted-project/ExtractedChart.csproj -c Release -f net10.0-browserwasm 2>&1 | tee artifacts/extracted-browser.txt
       - uses: actions/setup-node@v4
         if: always() && steps.site.outcome == 'success'
         with:

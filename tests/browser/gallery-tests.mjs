@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
 import {readFile} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
 
 export async function validateGallery(page,{inspect,scenario,output}){
  const state=()=>page.evaluate(()=>JSON.parse(globalThis.chartBridge.InspectGallery()));
@@ -71,6 +72,18 @@ export async function validateGallery(page,{inspect,scenario,output}){
   await home();assert.equal((await inspect()).streaming,false);
   const first=await state();await click('Open example');await page.waitForFunction(()=>!JSON.parse(globalThis.chartBridge.InspectGallery()).open);await home();
   const next=await state();assert(next.cachedPreviews<=32);assert(next.generatedPreviews<=first.generatedPreviews+2);assert.equal(next.previewErrors,0);
+ });
+ await scenario('gallery: project extraction downloads the current edited standalone chart',async()=>{
+  await entry('surface');await click('Open example');await page.waitForFunction(()=>!JSON.parse(globalThis.chartBridge.InspectGallery()).open);
+  await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.Inspect()).example==='surface'&&JSON.parse(globalThis.chartBridge.Inspect()).vertices>0);
+  await page.evaluate(()=>globalThis.chartBridge.Command('projection','true'));
+  const saved=await page.evaluate(()=>globalThis.chartBridge.ExportDocument());
+  await page.evaluate(()=>globalThis.chartBridge.BringActionIntoView('Extract project'));await frames();
+  const pending=page.waitForEvent('download');await toolbar('Extract project');const file=await pending;const path=resolve(output,'surface-project.zip');await file.saveAs(path);
+  const names=execFileSync('unzip',['-Z1',path],{encoding:'utf8'}).trim().split('\n');assert.equal(names.length,12);assert(names.includes('ExtractedChart.csproj'));
+  const doc=execFileSync('unzip',['-p',path,'chart.json'],{encoding:'utf8'});assert.equal(doc,saved);
+  const project=execFileSync('unzip',['-p',path,'ExtractedChart.csproj'],{encoding:'utf8'});assert(project.includes('net10.0-desktop')&&project.includes('net10.0-browserwasm'));assert(!project.includes('ProjectReference'));
+  await home();return {entries:names.length,bytes:(await readFile(path)).length};
  });
  await scenario('gallery: favorites and list preference survive browser reload',async()=>{
   await click('List view');await entry('signals');await click('Open example');await page.waitForFunction(()=>!JSON.parse(globalThis.chartBridge.InspectGallery()).open);

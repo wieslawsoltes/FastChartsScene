@@ -30,6 +30,7 @@ public sealed partial class ExplorerPage : Page
     private readonly TextBox _usage=new() { IsReadOnly=true,AcceptsReturn=true,FontFamily=new FontFamily("monospace"),FontSize=12,BorderThickness=new Thickness(0),Margin=new Thickness(12) };
     private readonly Button _play=new() { Content="Start acquisition",Padding=new Thickness(12,6,12,6) };
     private RollingBuffer[] _buffers=[];
+    private readonly double[] _streamBatch=new double[64];
     private bool _inspectorVisible=true;
     private readonly Grid _root=new();
     private static SolidColorBrush Brush(string hex)
@@ -138,7 +139,7 @@ public sealed partial class ExplorerPage : Page
         using var update=Document.BeginUpdate();
         for(var channel=0;channel<3;channel++)
         {
-            var buffer=_buffers[channel]; var first=buffer.SamplesWritten; var batch=new double[64];
+            var buffer=_buffers[channel]; var first=buffer.SamplesWritten; var batch=_streamBatch;
             for(var i=0;i<batch.Length;i++) batch[i]=Signal((first+i)*.0005,channel);
             buffer.Append(batch); ((LineSeries)Document.Series[channel]).Data=buffer.Snapshot();
         }
@@ -153,8 +154,9 @@ public sealed partial class ExplorerPage : Page
     {
         try
         {
-            byte[] bytes; string mime; var extension=type=="allcsv"?"csv":type;
-            if(type=="png") { bytes=Chart.ExportPng(2); mime="image/png"; }
+            byte[] bytes; string mime; var extension=type=="allcsv"?"csv":type=="project"?"zip":type;
+            if(type=="project") { bytes=ChartProjectExport.Write(Document); mime="application/zip"; }
+            else if(type=="png") { bytes=Chart.ExportPng(2); mime="image/png"; }
             else if(type=="csv")
             {
                 var data=Document.Series.OfType<DataSeries>().FirstOrDefault()?.Data??throw new NotSupportedException("Use All data CSV to export financial, grid or 3D series.");
