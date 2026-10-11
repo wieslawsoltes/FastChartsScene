@@ -4,7 +4,7 @@
     <OutputType>Exe</OutputType><UnoSingleProject>true</UnoSingleProject>
     <ApplicationTitle>FastChartsScene</ApplicationTitle><ApplicationId>org.fastchartsscene.explorer</ApplicationId>
     <ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion><ApplicationVersion>1</ApplicationVersion>
-    <UnoFeatures>SkiaRenderer;GLCanvas;</UnoFeatures>
+    <UnoFeatures>SkiaRenderer;GLCanvas;Logging;</UnoFeatures>
     <WasmShellWebAppBasePath>/FastChartsScene/</WasmShellWebAppBasePath><WasmShellEnablePWA>false</WasmShellEnablePWA>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
