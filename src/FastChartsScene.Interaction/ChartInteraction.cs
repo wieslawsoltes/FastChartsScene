@@ -131,31 +131,4 @@ public sealed partial class ChartInteraction
         var series=hit==null?null:_document.Series.FirstOrDefault(s=>s.Id==hit.Id);
         if(series==null) return false; series.Visible=!series.Visible; return true;
     }
-    /// <summary>Nearest original sample in screen space, not a decimated or fabricated value.</summary>
-    public DataHit? HitTestData(RenderFrame frame,PointD location,double tolerance=12)
-    {
-        if(!location.IsFinite||!double.IsFinite(tolerance)||tolerance<0) throw new ArgumentOutOfRangeException(nameof(tolerance));
-        if(_document.View!=ChartView.XY) return null;
-        DataHit? best=null;
-        foreach(var series in _document.Series.OfType<DataSeries>().Where(s=>s.Visible))
-        {
-            var pane=frame.Layout.ForAxis(series.YAxisId); if(!pane.Contains(location)) continue;
-            var x=_document.FindX(series.XAxisId); var y=_document.FindY(series.YAxisId); var data=series.Data;
-            var first=0; var end=data.Count;
-            if(data.IsOrdered&&series is not BarSeries { Horizontal:true })
-            {
-                var a=x.FromUnit((location.X-tolerance-pane.X)/pane.Width); var b=x.FromUnit((location.X+tolerance-pane.X)/pane.Width);
-                first=DataSearch.LowerBound(data,Math.Min(a,b)); end=DataSearch.UpperBound(data,Math.Max(a,b));
-            }
-            for(var i=first;i<end;i++)
-            {
-                var raw=new PointD(data.X(i),data.Y(i));
-                var screen=frame.Layout.ToScreen(x,y,series is BarSeries { Horizontal:true }?new(raw.Y,raw.X):raw);
-                if(!screen.IsFinite) continue;
-                var dx=screen.X-location.X; var dy=screen.Y-location.Y; var distance=Math.Sqrt(dx*dx+dy*dy);
-                if(distance<=tolerance&&(best==null||distance<best.Distance)) best=new(series.Id,series.Title,i,raw,screen,distance);
-            }
-        }
-        return best;
-    }
 }
