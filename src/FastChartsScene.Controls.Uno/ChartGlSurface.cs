@@ -1,7 +1,6 @@
 using FastChartsScene.Core;
 using FastChartsScene.Rendering;
 using Silk.NET.OpenGL;
-using Windows.Foundation;
 using global::Uno.WinUI.Graphics3DGL;
 
 namespace FastChartsScene.Controls.Uno;
@@ -20,14 +19,11 @@ internal sealed class ChartGlSurface : GLCanvasElement
     public ChartGlSurface():base(null)
     {
         IsHitTestVisible=false;
-        // Uno 6.7.135 initializes its FBO during Loaded, before a Canvas child has necessarily
-        // been arranged. Give only that initial state a valid backing size. The owning control
-        // replaces it with the actual device-pixel dimensions on its next layout pass.
-        Loading+=(_,_)=>
-        {
-            if(RenderSize.Width>=1&&RenderSize.Height>=1) return;
-            Measure(new Size(1,1)); Arrange(new Rect(0,0,1,1));
-        };
+        // A Canvas gives an unsized child zero desired size. Uno creates this element's FBO
+        // during Loaded, before the parent's queued draw supplies device-pixel dimensions.
+        // Explicit initial dimensions participate in the normal measure/arrange pass;
+        // never invoke Measure from Loading, which is itself raised by Measure.
+        Width=1; Height=1;
     }
     private uint Shader(GL gl,ShaderType type,string body)
     {
