@@ -27,7 +27,8 @@ internal sealed partial class ChartGlSurface : SKCanvasElement
     private RenderFrame? _uploaded;
     private RenderFrame? _drawn;
     private int _width,_height;
-    private bool _contextCreated;
+    private bool _contextCreated, _disposed;
+    private int _lifetime;
     public ChartGlSurface()
     {
         IsHitTestVisible=false;
@@ -36,12 +37,26 @@ internal sealed partial class ChartGlSurface : SKCanvasElement
     }
     private void Initialize()
     {
-        if(_contextCreated) return;
+        if(_contextCreated || _disposed) return;
         try
         {
-            Driver=Create(_id); _contextCreated=true; _uploaded=_drawn=null; Error=null; IsGLInitialized=true; Invalidate();
+            var lifetime = ++_lifetime;
+            Driver=Create(_id, status => ContextChanged(status, lifetime)); _contextCreated=true; _uploaded=_drawn=null; Error=null; IsGLInitialized=true; Invalidate();
         }
         catch(Exception error) { Error=error.Message; IsGLInitialized=false; Console.Error.WriteLine("Chart WebGL initialization: "+error); }
+    }
+    private void ContextChanged(int status, int lifetime)
+    {
+        // Browser events can arrive while Uno is composing. Queue UI changes and reject
+        // callbacks queued before unload/reload so a dead context cannot revive the control.
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_disposed || !_contextCreated || lifetime != _lifetime) return;
+            _uploaded = _drawn = null;
+            Error = status == 1 ? null : status == 0 ? "WebGL context lost; waiting for restoration." : "WebGL resource restoration failed.";
+            IsGLInitialized = status == 1;
+            if (status == 1) Invalidate();
+        });
     }
     protected override void RenderOverride(SKCanvas canvas,Size area)
     {
@@ -72,12 +87,14 @@ internal sealed partial class ChartGlSurface : SKCanvasElement
     }
     private void Release()
     {
+        _lifetime++;
         if(_contextCreated) { Destroy(_id); _contextCreated=false; }
         _bitmap?.Dispose(); _bitmap=null; _pixels=[]; _uploaded=_drawn=null; _width=_height=0; IsGLInitialized=null;
     }
+    public new void Dispose() { if (_disposed) return; _disposed = true; Release(); }
     // Global functions use a globalThis-qualified name, with no ES-module argument.
     [JSImport("globalThis.FastChartsSceneWebGL.create")]
-    private static partial string Create(int id);
+    private static partial string Create(int id, [JSMarshalAs<JSType.Function<JSType.Number>>] Action<int> notify);
     [JSImport("globalThis.FastChartsSceneWebGL.draw")]
     private static partial void Draw(int id,[JSMarshalAs<JSType.MemoryView>] Span<byte> vertices,string metadata,int width,int height,[JSMarshalAs<JSType.MemoryView>] Span<byte> pixels);
     [JSImport("globalThis.FastChartsSceneWebGL.destroy")]

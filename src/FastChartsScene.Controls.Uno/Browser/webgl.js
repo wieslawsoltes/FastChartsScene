@@ -1,9 +1,9 @@
-// Independent WebGL2 backend for FastChartsScene's packed frame contract.
-// This file is embedded in the reusable Uno package; no external script, CDN or global API patch.
+// Independent WebGL2 backend. No global WebGL/runtime patch; borrowed memory views never escape a call.
 (()=>{
 'use strict';
 if(globalThis.FastChartsSceneWebGL) return;
 const contexts=new Map();
+const maxVertexBytes=256*1024*1024;
 const vertexSource=`#version 300 es
 precision highp float;
 layout(location=0) in vec3 aPosition;
@@ -24,54 +24,75 @@ in vec4 vColor;
 out vec4 fragmentColor;
 void main(){if(vColor.a<=0.0)discard;fragmentColor=vColor;}`;
 function shader(gl,type,text){
- const result=gl.createShader(type); if(!result) throw new Error('Could not allocate shader');
- gl.shaderSource(result,text); gl.compileShader(result);
+ const result=gl.createShader(type);if(!result)throw new Error('Could not allocate shader');
+ gl.shaderSource(result,text);gl.compileShader(result);
  if(!gl.getShaderParameter(result,gl.COMPILE_STATUS)){const error=gl.getShaderInfoLog(result);gl.deleteShader(result);throw new Error(error);}
  return result;
 }
 function initialize(state){
- const gl=state.gl; const vertex=shader(gl,gl.VERTEX_SHADER,vertexSource); let fragment,program;
+ const gl=state.gl;const vertex=shader(gl,gl.VERTEX_SHADER,vertexSource);let fragment,program,vao,buffer;
  try{
-  fragment=shader(gl,gl.FRAGMENT_SHADER,fragmentSource); program=gl.createProgram();
-  if(!program) throw new Error('Could not allocate shader program');
+  fragment=shader(gl,gl.FRAGMENT_SHADER,fragmentSource);program=gl.createProgram();
+  if(!program)throw new Error('Could not allocate shader program');
   gl.attachShader(program,vertex);gl.attachShader(program,fragment);gl.linkProgram(program);
-  if(!gl.getProgramParameter(program,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
-  state.program=program;state.matrix=gl.getUniformLocation(program,'uMatrix');state.pointSize=gl.getUniformLocation(program,'uPointSize');
-  state.vao=gl.createVertexArray();state.buffer=gl.createBuffer();gl.bindVertexArray(state.vao);gl.bindBuffer(gl.ARRAY_BUFFER,state.buffer);
+  if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));
+  vao=gl.createVertexArray();buffer=gl.createBuffer();if(!vao||!buffer)throw new Error('Could not allocate vertex resources');
+  gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
   gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,40,0);
   gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,4,gl.FLOAT,false,40,12);
   gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,3,gl.FLOAT,false,40,28);
-  state.hasVertices=false;
- }catch(error){if(program)gl.deleteProgram(program);throw error;}
+  state.program=program;state.vao=vao;state.buffer=buffer;
+  state.matrix=gl.getUniformLocation(program,'uMatrix');state.pointSize=gl.getUniformLocation(program,'uPointSize');
+  state.capacity=0;state.uploadedBytes=0;state.metadata=null;state.frame=null;state.status=1;state.error='';state.generation++;
+ }catch(error){if(buffer)gl.deleteBuffer(buffer);if(vao)gl.deleteVertexArray(vao);if(program)gl.deleteProgram(program);throw error;}
  finally{gl.deleteShader(vertex);if(fragment)gl.deleteShader(fragment);}
 }
-function create(id){
- if(contexts.has(id)) throw new Error('Duplicate chart context');
+function create(id,notify){
+ if(contexts.has(id))throw new Error('Duplicate chart context');
  const canvas=document.createElement('canvas');
  const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,depth:true,stencil:false,antialias:false,preserveDrawingBuffer:false,powerPreference:'high-performance'});
- if(!gl) throw new Error('WebGL2 is unavailable; select the Skia fallback.');
- const state={canvas,gl,readback:null,flipped:null,hasVertices:false,lost:false};
- canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();state.lost=true;});
- canvas.addEventListener('webglcontextrestored',()=>{state.lost=false;initialize(state);});
- try{initialize(state);contexts.set(id,state);}catch(error){gl.getExtension('WEBGL_lose_context')?.loseContext();throw error;}
+ if(!gl)throw new Error('WebGL2 is unavailable; select the Skia fallback.');
+ const state={id,canvas,gl,notify,readback:null,flipped:null,staging:null,status:0,error:'',disposed:false,
+  generation:0,uploads:0,bufferAllocations:0,stagingAllocations:0,readbackAllocations:0};
+ state.onLost=event=>{
+  event.preventDefault();if(state.disposed)return;
+  state.status=0;state.uploadedBytes=0;state.notify?.(0);
+ };
+ state.onRestored=()=>{
+  if(state.disposed)return;
+  try{initialize(state);state.notify?.(1);}
+  catch(error){state.status=-1;state.error=String(error);state.notify?.(-1);}
+ };
+ canvas.addEventListener('webglcontextlost',state.onLost);canvas.addEventListener('webglcontextrestored',state.onRestored);
+ try{initialize(state);contexts.set(id,state);}
+ catch(error){state.disposed=true;state.notify=null;canvas.removeEventListener('webglcontextlost',state.onLost);canvas.removeEventListener('webglcontextrestored',state.onRestored);gl.getExtension('WEBGL_lose_context')?.loseContext();throw error;}
  const debug=gl.getExtension('WEBGL_debug_renderer_info');
  return 'WebGL2 · '+(debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER));
 }
 function draw(id,vertices,metadata,width,height,pixels){
  const state=contexts.get(id);if(!state)throw new Error('Chart context is not initialized');
- const {gl,canvas}=state;if(state.lost||gl.isContextLost())throw new Error('The WebGL context was lost. Reload the chart to retry, or use Skia fallback.');
+ const {gl,canvas}=state;if(state.status!==1||gl.isContextLost())throw new Error(state.error||'WebGL context lost; waiting for restoration.');
  if(!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||width*height>16000000)throw new Error('Invalid chart framebuffer size');
- const frame=JSON.parse(metadata);
- if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;state.readback=new Uint8Array(width*height*4);state.flipped=new Uint8Array(width*height*4);}
- if(!state.readback){state.readback=new Uint8Array(width*height*4);state.flipped=new Uint8Array(width*height*4);}
+ if(pixels.length!==width*height*4)throw new Error('RGBA destination length mismatch');
+ if(metadata!==state.metadata){state.frame=JSON.parse(metadata);state.metadata=metadata;}
+ const frame=state.frame;
+ const required=frame.vertexCount*40;
+ if(!Number.isSafeInteger(required)||required<0||required>maxVertexBytes)throw new Error('Chart vertex data exceeds the 256 MiB limit');
+ if(vertices.length!==0&&vertices.length!==required)throw new Error('Packed vertex length mismatch');
+ if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}
+ if(!state.readback||state.readback.length!==pixels.length){state.readback=new Uint8Array(pixels.length);state.flipped=new Uint8Array(pixels.length);state.readbackAllocations++;}
  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,width,height);gl.disable(gl.SCISSOR_TEST);gl.disable(gl.CULL_FACE);
  gl.colorMask(true,true,true,true);gl.depthMask(true);gl.clearDepth(1);
- const hex=frame.background.replace('#','');const alpha=hex.length===8?parseInt(hex.slice(6,8),16)/255:1;
+ const hex=frame.background.replace('#',''),alpha=hex.length===8?parseInt(hex.slice(6,8),16)/255:1;
  gl.clearColor(parseInt(hex.slice(0,2),16)/255*alpha,parseInt(hex.slice(2,4),16)/255*alpha,parseInt(hex.slice(4,6),16)/255*alpha,alpha);
  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(state.program);gl.bindVertexArray(state.vao);gl.bindBuffer(gl.ARRAY_BUFFER,state.buffer);
- // MemoryView is borrowed for this synchronous call only; slice owns the transferred upload.
- if(vertices.length>0){const bytes=vertices.slice();gl.bufferData(gl.ARRAY_BUFFER,bytes,gl.DYNAMIC_DRAW);state.hasVertices=true;}
- if(frame.vertexCount>0&&!state.hasVertices)throw new Error('GPU vertex data must be uploaded after context restoration');
+ if(vertices.length>0){
+  if(!state.staging||state.staging.length<required){let capacity=4096;while(capacity<required)capacity*=2;state.staging=new Uint8Array(capacity);state.stagingAllocations++;}
+  if(state.capacity<required){gl.bufferData(gl.ARRAY_BUFFER,state.staging.length,gl.DYNAMIC_DRAW);state.capacity=state.staging.length;state.bufferAllocations++;}
+  vertices.copyTo(state.staging.subarray(0,required));gl.bufferSubData(gl.ARRAY_BUFFER,0,state.staging,0,required);
+  state.uploadedBytes=required;state.uploads++;
+ }
+ if(required>state.uploadedBytes)throw new Error('Vertex upload required after context restoration');
  gl.enable(gl.BLEND);gl.blendEquationSeparate(gl.FUNC_ADD,gl.FUNC_ADD);gl.blendFuncSeparate(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
  gl.enable(gl.SCISSOR_TEST);gl.depthFunc(gl.LEQUAL);
  const sx=width/frame.width,sy=height/frame.height;
@@ -89,9 +110,13 @@ function draw(id,vertices,metadata,width,height,pixels){
  pixels.set(state.flipped);
 }
 function destroy(id){
- const state=contexts.get(id);if(!state)return;contexts.delete(id);const {gl}=state;
+ const state=contexts.get(id);if(!state)return;contexts.delete(id);const {gl,canvas}=state;
+ state.disposed=true;state.notify=null;canvas.removeEventListener('webglcontextlost',state.onLost);canvas.removeEventListener('webglcontextrestored',state.onRestored);
  if(!gl.isContextLost()){gl.deleteBuffer(state.buffer);gl.deleteVertexArray(state.vao);gl.deleteProgram(state.program);gl.getExtension('WEBGL_lose_context')?.loseContext();}
- state.readback=state.flipped=null;
+ state.readback=state.flipped=state.staging=state.frame=state.metadata=null;
 }
-globalThis.FastChartsSceneWebGL=Object.freeze({create,draw,destroy});
+// Read-only counters expose retained allocation and context generation, not chart data or GL objects.
+function inspect(){return [...contexts.values()].map(s=>({id:s.id,status:s.status,generation:s.generation,uploads:s.uploads,
+ bufferAllocations:s.bufferAllocations,stagingAllocations:s.stagingAllocations,readbackAllocations:s.readbackAllocations,capacity:s.capacity,uploadedBytes:s.uploadedBytes}));}
+globalThis.FastChartsSceneWebGL=Object.freeze({create,draw,destroy,inspect});
 })();
