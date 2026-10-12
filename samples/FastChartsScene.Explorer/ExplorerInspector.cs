@@ -13,6 +13,8 @@ public sealed partial class ExplorerPage
     private readonly TextBlock _inspectorError = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap,
         Foreground = new SolidColorBrush(Microsoft.UI.Colors.DarkRed), Visibility = Visibility.Collapsed };
     private readonly List<Action> _propertyRefresh = [];
+    private readonly List<Action> _axisDraftReset = [];
+    private long _inspectorGeneration;
     private bool _inspectorUpdating;
     private Axis? _editedAxis;
     private NumberBox? _rangeMinimum, _rangeMaximum;
@@ -30,7 +32,7 @@ public sealed partial class ExplorerPage
     }
     private void RefreshInspector()
     {
-        if (_inspectorUpdating) return; _inspectorUpdating = true;
+        if (_inspectorUpdating || _inspectorDocument == null || _inspectorDocument.IsDisposed || !ReferenceEquals(_inspectorDocument, Chart.Document)) return; _inspectorUpdating = true;
         try
         {
             foreach (var refresh in _propertyRefresh) refresh();
@@ -47,15 +49,18 @@ public sealed partial class ExplorerPage
         _inspectorUpdating = true;
         try
         {
+            var generation = ++_inspectorGeneration;
             var priorAxis = ReferenceEquals(_inspectorDocument, Chart.Document) ? _editedAxis : null;
             if (!ReferenceEquals(_inspectorDocument, Chart.Document)) _selectedInspectorSeriesId = null;
             _inspectorDocument = Chart.Document;
-            _propertyRefresh.Clear(); _editedAxis = null; _rangeDirty = false;
+            _propertyRefresh.Clear(); _axisDraftReset.Clear(); _editedAxis = null; _rangeDirty = false;
             _rangeMinimum = _rangeMaximum = null; _inspectorError.Text = ""; _inspectorError.Visibility = Visibility.Collapsed;
             _propertyGrid.Clear(); _inspector.Children.Clear(); _inspector.Spacing = 4; _inspector.Padding = new Thickness(6);
             _inspector.Children.Add(new TextBlock { Text = "Properties Editor", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+            _inspector.Children.Add(PropertyPresentationToolbar());
             _inspector.Children.Add(_propertySearch); _inspector.Children.Add(_inspectorError); _inspector.Children.Add(_propertyGrid);
             var d = Document;
+            bool Edit(Action write) => generation == _inspectorGeneration && InspectorEdit(d, write);
             using var batch = _propertyGrid.BeginUpdate();
             Text("Chart", "Title", () => d.Title, v => d.Title = v);
             Text("Chart", "Subtitle", () => d.Subtitle, v => d.Subtitle = v);
@@ -78,11 +83,15 @@ public sealed partial class ExplorerPage
             _editedAxis = priorAxis != null && (d.XAxes.Contains(priorAxis) || d.YAxes.Contains(priorAxis) || ReferenceEquals(d.ZAxis, priorAxis)) ? priorAxis : d.XAxis;
             var axes = d.XAxes.Select(a => new AxisChoice("X", a)).Concat(d.YAxes.Select(a => new AxisChoice("Y", a))).Append(new AxisChoice("Z", d.ZAxis)).ToArray();
             var selector = new ComboBox { ItemsSource = axes, SelectedItem = axes.First(a => ReferenceEquals(a.Axis, _editedAxis)) };
-            _propertyGrid.Add("Axis", "Selected axis", Compact(selector));
+            _propertyGrid.Add("Axis", "Selected axis", Compact(selector), DescribeProperty("Axis", "Selected axis"));
             selector.SelectionChanged += (_, _) =>
             {
-                if (_inspectorUpdating || selector.SelectedItem is not AxisChoice chosen) return;
-                _editedAxis = chosen.Axis; _rangeDirty = false; RefreshInspector();
+                if (_inspectorUpdating || generation != _inspectorGeneration || selector.SelectedItem is not AxisChoice chosen) return;
+                _editedAxis = chosen.Axis; _rangeDirty = false;
+                _inspectorUpdating = true;
+                try { foreach (var reset in _axisDraftReset) reset(); }
+                finally { _inspectorUpdating = false; }
+                _inspectorError.Text = ""; _inspectorError.Visibility = Visibility.Collapsed; RefreshInspector();
             };
             Text("Axis", "Title", () => _editedAxis!.Title, v => _editedAxis!.Title = v);
             Text("Axis", "Units", () => _editedAxis!.Units, v => _editedAxis!.Units = v);
@@ -93,9 +102,9 @@ public sealed partial class ExplorerPage
             _rangeMinimum = new NumberBox { Value = _editedAxis.Range.Minimum }; _rangeMaximum = new NumberBox { Value = _editedAxis.Range.Maximum };
             _rangeMinimum.ValueChanged += (_, _) => { if (!_inspectorUpdating) _rangeDirty = true; };
             _rangeMaximum.ValueChanged += (_, _) => { if (!_inspectorUpdating) _rangeDirty = true; };
-            _propertyGrid.Add("Axis", "Minimum", Compact(_rangeMinimum)); _propertyGrid.Add("Axis", "Maximum", Compact(_rangeMaximum));
+            _propertyGrid.Add("Axis", "Minimum", Compact(_rangeMinimum), DescribeProperty("Axis", "Minimum")); _propertyGrid.Add("Axis", "Maximum", Compact(_rangeMaximum), DescribeProperty("Axis", "Maximum"));
             var commands = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3 };
-            commands.Children.Add(Compact(Button("Apply range", () => InspectorEdit(d, () =>
+            commands.Children.Add(Compact(Button("Apply range", () => Edit(() =>
             { _editedAxis!.Range = new AxisRange(_rangeMinimum.Value, _rangeMaximum.Value); _rangeDirty = false; RefreshInspector(); }))));
             commands.Children.Add(Compact(Button("Reset draft", () => { _rangeDirty = false; RefreshInspector(); _inspectorError.Text = ""; _inspectorError.Visibility = Visibility.Collapsed; })));
             _propertyGrid.Add("Axis", "Range commands", commands, "Apply both range bounds atomically or restore the current viewport.", true);
@@ -105,10 +114,10 @@ public sealed partial class ExplorerPage
             var selected = seriesOptions.FirstOrDefault(s => s.Series.Id == _selectedInspectorSeriesId) ?? seriesOptions.FirstOrDefault();
             _selectedInspectorSeriesId = selected?.Series.Id;
             var seriesSelector = new ComboBox { ItemsSource = seriesOptions, SelectedItem = selected };
-            _propertyGrid.Add("Series", "Selected series", Compact(seriesSelector));
+            _propertyGrid.Add("Series", "Selected series", Compact(seriesSelector), DescribeProperty("Series", "Selected series"));
             seriesSelector.SelectionChanged += (_, _) =>
             {
-                if (_inspectorUpdating || seriesSelector.SelectedItem is not SeriesChoice choice || choice.Series.Id == _selectedInspectorSeriesId) return;
+                if (_inspectorUpdating || generation != _inspectorGeneration || seriesSelector.SelectedItem is not SeriesChoice choice || choice.Series.Id == _selectedInspectorSeriesId) return;
                 _selectedInspectorSeriesId = choice.Series.Id; BuildInspector();
             };
             if (selected != null)
@@ -122,7 +131,7 @@ public sealed partial class ExplorerPage
                 Choice(group, "YAxis", () => series.YAxisId, v => { d.FindY(v); series.YAxisId = v; }, d.YAxes.Select(a => a.Id).ToArray());
                 var count = new TextBlock { Text = series.PointCount.ToString(), FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
                 var lastCount = series.PointCount; _propertyRefresh.Add(() => { var next = series.PointCount; if (next != lastCount) { count.Text = next.ToString(); lastCount = next; } });
-                _propertyGrid.Add(group, "PointCount", count);
+                _propertyGrid.Add(group, "PointCount", count, DescribeProperty(group, "PointCount"));
                 if (series is LineSeries line && d.View == ChartView.XY)
                 {
                     Choice(group, "Marker", () => line.Marker, v => line.Marker = v, Enum.GetValues<MarkerShape>());
@@ -159,7 +168,7 @@ public sealed partial class ExplorerPage
             void Text(string group, string name, Func<string> read, Action<string> write)
             {
                 var box = new TextBox { Text = read() }; var dirty = false; var updating = false;
-                _propertyGrid.Add(group, name, Compact(box));
+                _propertyGrid.Add(group, name, Compact(box), DescribeProperty(group, name));
                 void Refresh()
                 {
                     if (dirty || box.FocusState != FocusState.Unfocused) return;
@@ -167,25 +176,42 @@ public sealed partial class ExplorerPage
                     updating = true; try { box.Text = value; } finally { updating = false; }
                 }
                 box.TextChanged += (_, _) => { if (!_inspectorUpdating && !updating) dirty = true; };
-                box.LostFocus += (_, _) => { if (dirty && InspectorEdit(d, () => write(box.Text))) { dirty = false; Refresh(); } };
+                box.LostFocus += (_, _) => { if (dirty && generation == _inspectorGeneration && Edit(() => write(box.Text))) { dirty = false; Refresh(); } };
+                void Reset()
+                {
+                    dirty = false; updating = true;
+                    try { box.Text = read(); } finally { updating = false; }
+                }
+                if (group == "Axis") _axisDraftReset.Add(Reset);
+                box.AddHandler(UIElement.KeyDownEvent, new Microsoft.UI.Xaml.Input.KeyEventHandler((_, e) =>
+                {
+                    if (e.Key != Windows.System.VirtualKey.Escape || generation != _inspectorGeneration) return;
+                    Reset(); _inspectorError.Text = ""; _inspectorError.Visibility = Visibility.Collapsed; e.Handled = true;
+                }), true);
                 _propertyRefresh.Add(Refresh);
             }
             void Number(string group, string name, Func<double> read, Action<double> write)
             {
-                var box = new NumberBox { Value = read() }; _propertyGrid.Add(group, name, Compact(box));
-                box.ValueChanged += (_, _) => InspectorEdit(d, () => write(box.Value));
+                var box = new NumberBox { Value = read() }; _propertyGrid.Add(group, name, Compact(box), DescribeProperty(group, name));
+                var updating = false;
+                box.ValueChanged += (_, _) =>
+                {
+                    if (updating || _inspectorUpdating || generation != _inspectorGeneration) return;
+                    if (!Edit(() => write(box.Value)))
+                    { updating = true; try { box.Value = read(); } finally { updating = false; } }
+                };
                 _propertyRefresh.Add(() => { if (box.FocusState == FocusState.Unfocused && box.Value != read()) box.Value = read(); });
             }
             void Boolean(string group, string name, Func<bool> read, Action<bool> write)
             {
-                var box = new CheckBox { IsChecked = read(), MinHeight = 24, Padding = new Thickness(0) }; _propertyGrid.Add(group, name, box);
-                box.Checked += (_, _) => InspectorEdit(d, () => write(true)); box.Unchecked += (_, _) => InspectorEdit(d, () => write(false));
+                var box = new CheckBox { IsChecked = read(), MinHeight = 24, Padding = new Thickness(0) }; _propertyGrid.Add(group, name, box, DescribeProperty(group, name));
+                box.Checked += (_, _) => Edit(() => write(true)); box.Unchecked += (_, _) => Edit(() => write(false));
                 _propertyRefresh.Add(() => { if (box.IsChecked != read()) box.IsChecked = read(); });
             }
             void Choice<T>(string group, string name, Func<T> read, Action<T> write, T[] choices)
             {
-                var box = new ComboBox { ItemsSource = choices, SelectedItem = read() }; _propertyGrid.Add(group, name, Compact(box));
-                box.SelectionChanged += (_, _) => { if (box.SelectedItem is T value) { InspectorEdit(d, () => write(value)); RefreshInspector(); } };
+                var box = new ComboBox { ItemsSource = choices, SelectedItem = read() }; _propertyGrid.Add(group, name, Compact(box), DescribeProperty(group, name));
+                box.SelectionChanged += (_, _) => { if (box.SelectedItem is T value) { Edit(() => write(value)); RefreshInspector(); } };
                 _propertyRefresh.Add(() => { if (!Equals(box.SelectedItem, read())) box.SelectedItem = read(); });
             }
         }

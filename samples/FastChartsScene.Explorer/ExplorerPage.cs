@@ -58,7 +58,7 @@ public sealed partial class ExplorerPage : Page
     {
         _workspace.ColumnDefinitions[0].Width=new GridLength(0);
         _workspace.ColumnDefinitions[2].Width=new GridLength(_inspectorVisible&&ActualWidth>=1100?274:0);
-        _inspectorScroll.Visibility=_inspectorVisible&&ActualWidth>=1100?Visibility.Visible:Visibility.Collapsed;
+        _inspectorPane.Visibility=_inspectorVisible&&ActualWidth>=1100?Visibility.Visible:Visibility.Collapsed;
         _center.RowDefinitions[1].Height=new GridLength(_detailsVisible?168:0);
         _center.Children[1].Visibility=_detailsVisible?Visibility.Visible:Visibility.Collapsed;
     }

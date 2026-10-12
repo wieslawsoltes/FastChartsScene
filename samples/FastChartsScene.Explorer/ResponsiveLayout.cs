@@ -44,15 +44,18 @@ public sealed partial class ExplorerPage
                 if(ActualWidth>=1100||InspectorDialogOpen) return;
                 _inspectorVisible=true;
                 var owner=_inspectorScroll;
-                var scroll=new ScrollViewer { HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,HorizontalScrollMode=ScrollMode.Disabled,MaxHeight=560 };
+                var scroll=new ScrollViewer { RequestedTheme=ElementTheme.Light, HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,HorizontalScrollMode=ScrollMode.Disabled,MaxHeight=470 };
+                var content=new Grid(); content.RowDefinitions.Add(new() { Height=new GridLength(1,GridUnitType.Star) }); content.RowDefinitions.Add(new() { Height=GridLength.Auto });
+                content.Children.Add(scroll);
                 try
                 {
                     InspectorDialogOpen=true; owner.Content=null; scroll.Content=_inspector;
-                    var dialog=new ContentDialog { Title="Chart inspector",Content=scroll,CloseButtonText="Done",XamlRoot=XamlRoot };
+                    _inspectorPane.Children.Remove(_propertyHelp); content.Children.Add(_propertyHelp);
+                    var dialog=new ContentDialog { Title="Chart inspector",RequestedTheme=ElementTheme.Light,Content=content,CloseButtonText="Done",XamlRoot=XamlRoot };
                     await dialog.ShowAsync();
                 }
                 catch(Exception error) { LastCommandError=error.Message; UpdateStatus(); }
-                finally { scroll.Content=null; owner.Content=_inspector; InspectorDialogOpen=false; }
+                finally { scroll.Content=null; owner.Content=_inspector; content.Children.Remove(_propertyHelp); _inspectorPane.Children.Add(_propertyHelp); InspectorDialogOpen=false; }
             };
         }
     }
@@ -87,7 +90,7 @@ public static partial class BrowserBridge
     {
         static Button? Find(DependencyObject node,string text)
         {
-            if(node is Button button&&button.Content is string name&&name==text) return button;
+            if(node is Button button && (Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(button)==text || button.Content is string name&&name==text)) return button;
             for(var i=0;i<VisualTreeHelper.GetChildrenCount(node);i++)
             { var found=Find(VisualTreeHelper.GetChild(node,i),text); if(found!=null) return found; }
             return null;
