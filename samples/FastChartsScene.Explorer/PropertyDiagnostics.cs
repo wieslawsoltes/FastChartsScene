@@ -11,7 +11,7 @@ using System.Runtime.InteropServices.JavaScript;
 #endif
 
 namespace FastChartsScene.Explorer;
-public sealed record PropertySnapshot(int Rows, int VisibleRows, long FilterPasses, string Filter, string Error);
+public sealed record PropertySnapshot(int Rows, int VisibleRows, long FilterPasses, string Filter, string Error, string SortMode, double NameColumnWidth, string? SelectedPath, string? Description, string[] Order, long LayoutPasses);
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(PropertySnapshot))]
 internal partial class PropertyJsonContext : JsonSerializerContext { }
@@ -23,10 +23,10 @@ public static partial class BrowserBridge
     public static string InspectProperties()
     {
         var p = Page!; var grid = p.Properties;
-        return JsonSerializer.Serialize(new PropertySnapshot(grid.RowCount, grid.VisibleRowCount, grid.FilterPasses, grid.Filter, p.PropertyError), PropertyJsonContext.Default.PropertySnapshot);
+        return JsonSerializer.Serialize(new PropertySnapshot(grid.RowCount, grid.VisibleRowCount, grid.FilterPasses, grid.Filter, p.PropertyError, grid.SortMode.ToString(), grid.NameColumnWidth, grid.SelectedProperty?.Path, grid.SelectedProperty?.Description, grid.VisiblePropertyPaths.ToArray(), grid.LayoutPasses), PropertyJsonContext.Default.PropertySnapshot);
     }
     private static FrameworkElement PropertyElement(string category, string name) =>
-        category == "$search" ? PropertySearchControl() : name == "$group" ? Page!.Properties.GroupHeader(category) : Page!.Properties.Editor(category, name);
+        category == "$search" ? PropertyNamedControl("Search properties") : category == "$toolbar" ? PropertyNamedControl(name) : name == "$group" ? Page!.Properties.GroupHeader(category) : Page!.Properties.Editor(category, name);
 #if __WASM__
     [JSExport]
 #endif
@@ -63,11 +63,29 @@ public static partial class BrowserBridge
         CheckBox box => box.IsChecked == true ? "true" : "false",
         _ => ""
     };
-    private static FrameworkElement PropertySearchControl()
+#if __WASM__
+    [JSExport]
+#endif
+    public static string PropertyDividerBounds(string category, string name)
+    {
+        var editor = PropertyElement(category, name);
+        if (editor.Parent is not Grid row || row.Children.OfType<Microsoft.UI.Xaml.Controls.Primitives.Thumb>().FirstOrDefault() is not { } divider) return "";
+        return Bounds(divider);
+    }
+#if __WASM__
+    [JSExport]
+#endif
+    public static void SelectInspectedAxis(int index)
+    {
+        var selector = (ComboBox)Page!.Properties.Editor("Axis", "Selected axis");
+        if (index < 0 || index >= selector.Items.Count) throw new ArgumentOutOfRangeException(nameof(index));
+        selector.SelectedIndex = index;
+    }
+    private static FrameworkElement PropertyNamedControl(string name)
     {
         DependencyObject? Find(DependencyObject n)
         {
-            if (n is TextBox box && Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(box) == "Search properties") return box;
+            if (n is FrameworkElement element && Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(element) == name) return element;
             for (var i = 0; i < VisualTreeHelper.GetChildrenCount(n); i++) { var item = Find(VisualTreeHelper.GetChild(n, i)); if (item != null) return item; }
             return null;
         }
@@ -88,7 +106,29 @@ public sealed partial class ExplorerPage
         if (grid.FilterPasses != 1) throw new InvalidOperationException("Batched property construction performed redundant passes.");
         grid.Filter = "value"; if (grid.VisibleRowCount != 1 || editor.Text != "draft") throw new InvalidOperationException("Property filtering lost editor state.");
         var passes = grid.FilterPasses; grid.Filter = " VALUE "; if (grid.FilterPasses != passes) throw new InvalidOperationException("Repeated filters were not cached.");
-        grid.Clear(); if (VisualTreeHelper.GetParent(editor) != null) throw new InvalidOperationException("Clear retained editor parenting.");
+        grid.Filter = "";
+        grid.SortMode = PropertyGridSortMode.Alphabetical;
+        if (!grid.VisiblePropertyPaths.SequenceEqual(new[] { "Group.Other", "Group.Value" }) || !ReferenceEquals(grid.Editor("Group", "Value"), editor) || editor.Text != "draft") throw new InvalidOperationException("Sorting replaced editors or produced the wrong order.");
+        var layouts = grid.LayoutPasses; grid.SortMode = PropertyGridSortMode.Alphabetical;
+        if (grid.LayoutPasses != layouts) throw new InvalidOperationException("Identical sorting rebuilt the layout.");
+        grid.SelectProperty("Group", "Value"); if (grid.SelectedProperty?.Path != "Group.Value") throw new InvalidOperationException("Property selection failed.");
+        foreach (var width in new[] { double.NaN, double.PositiveInfinity, 0, 221 })
+        {
+            try { grid.NameColumnWidth = width; throw new InvalidOperationException("Invalid column width accepted."); }
+            catch (ArgumentOutOfRangeException) { }
+        }
+        if (grid.NameColumnWidth != 94) throw new InvalidOperationException("Invalid width changed state.");
+        try { grid.SortMode = (PropertyGridSortMode)999; throw new InvalidOperationException("Invalid sorting accepted."); } catch (ArgumentOutOfRangeException) { }
+        grid.SortMode = PropertyGridSortMode.Categorized;
+        if (!grid.VisiblePropertyPaths.SequenceEqual(new[] { "Group.Value", "Group.Other" })) throw new InvalidOperationException("Category order was not restored.");
+        grid.Clear(); if (grid.SelectedProperty != null) throw new InvalidOperationException("Clear retained selection metadata.");
+        var large = new PropertyGridControl();
+        using (large.BeginUpdate()) for (var i = 0; i < 512; i++) large.Add("Group", "P" + i, new TextBox());
+        if (large.FilterPasses != 1 || large.LayoutPasses != 1 || large.RowCount != 512) throw new InvalidOperationException("Large batched construction was not one pass.");
+        var extra = new TextBox();
+        try { large.Add("Group", "overflow", extra); throw new InvalidOperationException("Unbounded row accepted."); } catch (InvalidOperationException) when (large.RowCount == 512 && extra.Parent == null) { }
+        large.Clear();
+        if (VisualTreeHelper.GetParent(editor) != null) throw new InvalidOperationException("Clear retained editor parenting.");
         var gallery = new CatalogBrowserControl { Width = 300, Height = 300, Opacity = 0, IsHitTestVisible = false };
         gallery.SetModel(model, "a");
         try

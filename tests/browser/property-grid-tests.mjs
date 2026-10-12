@@ -118,4 +118,57 @@ export async function validateProperties(page,{inspect,scenario,output}) {
   assert.equal(await page.evaluate(()=>globalThis.chartBridge.CheckReusableControlLifetime()),'passed');
  });
  await select('signals');
+ await scenario('properties: alphabetical view retains editors and shows selected-property help',async()=>{
+  await click('Chart','Title');
+  await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectProperties()).selectedPath==='Chart.Title');
+  assert((await state()).description.includes('Escape'));
+  const before=await saved();
+  await click('$toolbar','Alphabetical properties');
+  await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectProperties()).sortMode==='Alphabetical');
+  const paths=(await state()).order;
+  const key=p=>p.slice(p.indexOf('.')+1).toUpperCase();
+  const expected=[...paths].sort((a,b)=>key(a)<key(b)?-1:key(a)>key(b)?1:a<b?-1:a>b?1:0);
+  assert.deepEqual(paths,expected);assert.deepEqual(await saved(),before);
+  await text('Chart','Title','Alphabetically edited chart');
+  await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.ExportDocument()).title==='Alphabetically edited chart');
+  await click('$toolbar','Categorized properties');
+  await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectProperties()).sortMode==='Categorized');
+  assert.equal(await page.evaluate(()=>globalThis.chartBridge.PropertyText('Chart','Title')),'Alphabetically edited chart');
+  await click('Chart','Title');await page.keyboard.press('Tab');
+  await page.screenshot({path:resolve(output,'properties-help-categorized.png'),scale:'css'});
+ });
+ await scenario('properties: real divider drag resizes labels without changing chart data',async()=>{
+  await propertyBounds('Chart','Title');
+  const before=await state(),document=await saved();
+  const b=await bounds(()=>page.evaluate(()=>JSON.parse(globalThis.chartBridge.PropertyDividerBounds('Chart','Title'))));
+  await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();
+  await page.mouse.move(b.x+b.width/2+24,b.y+b.height/2,{steps:6});await page.mouse.up();
+  await page.waitForFunction(w=>JSON.parse(globalThis.chartBridge.InspectProperties()).nameColumnWidth>w+10,before.nameColumnWidth);
+  assert.deepEqual(await saved(),document);
+  await page.screenshot({path:resolve(output,'properties-resized.png'),scale:'css'});
+ });
+ await scenario('properties: Escape cancels text and host-driven axis switches discard old-target drafts',async()=>{
+  await select('signals');const original=await saved();
+  await click('Chart','Title');await page.keyboard.press('Control+a');await page.keyboard.insertText('discard this draft');
+  await page.keyboard.press('Escape');await page.keyboard.press('Tab');
+  assert.equal((await saved()).title,original.title);
+  await click('Axis','Title');await page.keyboard.press('Control+a');await page.keyboard.insertText('old-axis pending draft');
+  // Explicit host-driven object selection while a native text editor still has focus.
+  await page.evaluate(()=>globalThis.chartBridge.SelectInspectedAxis(1));
+  await page.waitForFunction(t=>globalThis.chartBridge.PropertyText('Axis','Title')===t,original.yAxes[0].title);
+  await page.keyboard.press('Tab');
+  const switched=await saved();assert.equal(switched.xAxes[0].title,original.xAxes[0].title);assert.equal(switched.yAxes[0].title,original.yAxes[0].title);
+  await text('Axis','Title','Owned Y axis');
+  await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.ExportDocument()).yAxes[0].title==='Owned Y axis');
+  assert.equal((await saved()).xAxes[0].title,original.xAxes[0].title);
+ });
+ await scenario('properties: rejected numeric edits restore the displayed model value',async()=>{
+  await select('signals');const before=await saved();
+  await text('Axis','Weight','0');
+  await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectProperties()).error.length>0);
+  assert.equal((await saved()).xAxes[0].weight,before.xAxes[0].weight);
+  assert.equal(await page.evaluate(()=>globalThis.chartBridge.PropertyText('Axis','Weight')),String(before.xAxes[0].weight));
+  assert.equal((await inspect()).error,null);
+ });
+ await select('signals');
 }
