@@ -93,16 +93,43 @@ public static class AxisTickText
         ArgumentNullException.ThrowIfNull(text);
         if (text.Length > MaximumTextLength) throw new FormatException("Custom tick text exceeds 160 KiB.");
         List<CustomAxisTick> ticks = [];
-        var lineNumber = 0;
-        foreach (var line in text.ReplaceLineEndings("\n").Split('\n'))
+        var remaining = text.AsSpan(); var lineNumber = 0;
+        while (!remaining.IsEmpty)
         {
-            lineNumber++; if (string.IsNullOrWhiteSpace(line)) continue;
+            var end = remaining.IndexOfAny('\r', '\n');
+            var line = end < 0 ? remaining : remaining[..end];
+            if (end < 0) remaining = default;
+            else
+            {
+                var consumed = end + 1;
+                if (remaining[end] == '\r' && consumed < remaining.Length && remaining[consumed] == '\n') consumed++;
+                remaining = remaining[consumed..];
+            }
+            lineNumber++;
+            // ReplaceLineEndings also treats Unicode separators/form-feed as new records.
+            // That silently changed forbidden label text into otherwise-valid extra ticks.
+            // This grammar permits only CR, LF and CRLF, exactly as the native draft comparer.
+            if (line.IndexOfAny("\v\f\u0085\u2028\u2029".AsSpan()) >= 0)
+                throw new FormatException($"Unsupported line separator on line {lineNumber}. Use CR, LF or CRLF.");
+            if (line.IsWhiteSpace()) continue;
             if (ticks.Count == AxisTickOptions.MaximumTicks) throw new FormatException("At most 512 custom tick lines are supported.");
             var pipe = line.IndexOf('|'); var number = pipe < 0 ? line : line[..pipe];
             if (!double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) || !double.IsFinite(value))
                 throw new FormatException($"Invalid finite tick value on line {lineNumber}.");
-            ticks.Add(new(value, pipe < 0 ? null : line[(pipe + 1)..]));
+            string? label = null;
+            if (pipe >= 0)
+            {
+                var labelText = line[(pipe + 1)..];
+                if (labelText.Length > AxisTickOptions.MaximumLabelLength)
+                    throw new FormatException($"Tick label on line {lineNumber} exceeds 256 characters.");
+                foreach (var character in labelText)
+                    if (char.IsControl(character))
+                        throw new FormatException($"Tick label on line {lineNumber} must not contain control characters.");
+                label = labelText.ToString();
+            }
+            ticks.Add(new(value, label));
         }
+        if (ticks.Count == 0) return AxisTickOptions.Default.CustomTicks;
         try { return new AxisTickOptions(AxisTickMode.Custom, ticks).CustomTicks; }
         catch (ArgumentException error) { throw new FormatException(error.Message, error); }
     }
