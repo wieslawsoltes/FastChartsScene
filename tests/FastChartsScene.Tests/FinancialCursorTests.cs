@@ -66,12 +66,12 @@ internal static partial class Program
             }
         });
         Add("financial queries never invent interpolated prices between candles", () => {
-            using var d = FinancialDocument(new(2, 8, 12, 6, 10), new(8, 8, 12, 6, 10));
+            using var d = FinancialDocument(new OhlcPoint(2, 8, 12, 6, 10), new(8, 8, 12, 6, 10));
             var f = new SceneCompiler().Compile(d, 800, 600); var input = new ChartInteraction(d);
             True(input.HitTestFinancial(f, f.Layout.ToScreen(d.XAxis, d.YAxis, new(5, 10))) == null);
         });
         Add("financial exact ties prefer top series then lowest original index", () => {
-            using var d = FinancialDocument(new(4, 10, 16, 8, 12));
+            using var d = FinancialDocument(new OhlcPoint(4, 10, 16, 8, 12));
             var top = new FinancialSeries { Title = "Top" }; top.SetData(Enumerable.Repeat(new OhlcPoint(4, 10, 16, 8, 12, 9), 5000).ToArray()); d.Series.Add(top);
             var c = new SceneCompiler(); var f = c.Compile(d, 800, 600); var p = f.Layout.ToScreen(d.XAxis, d.YAxis, new(4, 12)); var input = new ChartInteraction(d);
             var hit = input.HitTestFinancial(f, p, 0)!; True(hit.SeriesId == top.Id); Equal(0, hit.Index); Equal(9, hit.Sample.Volume);
@@ -79,7 +79,7 @@ internal static partial class Program
             top.CursorTrackEnabled = false; f = c.Compile(d, 800, 600); True(input.HitTestFinancial(f, p)!.SeriesId == d.Series[0].Id);
         });
         Add("financial picking respects visibility tracking and invisible OHLC strokes", () => {
-            using var d = FinancialDocument(new(4, 10, 16, 8, 12)); var series = (FinancialSeries)d.Series[0];
+            using var d = FinancialDocument(new OhlcPoint(4, 10, 16, 8, 12)); var series = (FinancialSeries)d.Series[0];
             var c = new SceneCompiler(); var input = new ChartInteraction(d);
             FinancialDataHit? Query() { var f = c.Compile(d, 800, 600); return input.HitTestFinancial(f, f.Layout.ToScreen(d.XAxis, d.YAxis, new(4, 12))); }
             True(Query() != null); series.Visible = false; True(Query() == null); series.Visible = true;
@@ -88,7 +88,7 @@ internal static partial class Program
             series.Style = FinancialStyle.Candlestick; True(Query() != null); // Filled body remains visible.
         });
         Add("financial query rejects stale frames legends off-plot and invalid parameters", () => {
-            using var d = FinancialDocument(new(4, 10, 16, 8, 12)); var c = new SceneCompiler(); var f = c.Compile(d, 800, 600);
+            using var d = FinancialDocument(new OhlcPoint(4, 10, 16, 8, 12)); var c = new SceneCompiler(); var f = c.Compile(d, 800, 600);
             var p = f.Layout.ToScreen(d.XAxis, d.YAxis, new(4, 12)); var input = new ChartInteraction(d);
             d.Title = "changed"; True(input.HitTestFinancial(f, p) == null);
             d.ShowLegend = true; f = c.Compile(d, 800, 600); var legend = f.Metadata.Hits.First(h => h.Kind == "legend").Bounds;
@@ -100,7 +100,7 @@ internal static partial class Program
             d.Dispose(); Throws<ObjectDisposedException>(() => input.HitTestFinancial(f, p));
         });
         Add("financial queries use inverted logarithmic secondary axis bindings and exact clipping", () => {
-            using var d = FinancialDocument(new(2, 2, 8, .5, 4)); var s = (FinancialSeries)d.Series[0];
+            using var d = FinancialDocument(new OhlcPoint(2, 2, 8, .5, 4)); var s = (FinancialSeries)d.Series[0];
             var x = new Axis("time") { Range = new(.1, 10), Scale = AxisScale.Logarithmic, Inverted = true };
             var y = new Axis("price") { Range = new(1, 10), Scale = AxisScale.Logarithmic, Inverted = true };
             d.XAxes.Add(x); d.YAxes.Add(y); s.XAxisId = x.Id; s.YAxisId = y.Id;
@@ -112,7 +112,7 @@ internal static partial class Program
             True(input.HitTestFinancial(f, hit.Screen, 10000) == null);
         });
         Add("financial cursor is confined to its assigned stacked pane", () => {
-            using var d = FinancialDocument(new(4, 10, 16, 8, 12));
+            using var d = FinancialDocument(new OhlcPoint(4, 10, 16, 8, 12));
             d.AxisLayout = AxisLayout.Stacked; d.YAxes.Add(new Axis("bottom") { Range = new(0, 20) });
             var c = new SceneCompiler(); var f = c.Compile(d, 800, 600); var input = new ChartInteraction(d);
             var bottom = f.Layout.ForAxis("bottom"); True(input.HitTestFinancial(f, new(bottom.X + 100, bottom.Y + bottom.Height / 2), 10000) == null);
@@ -177,7 +177,7 @@ internal static partial class Program
             True(line.Visible && heat.Visible);
         });
         Add("financial cursor persistence roundtrips with legacy defaults and validates invalid settings", () => {
-            using var d = FinancialDocument(new(4, 10, 16, 8, 12, 12345)); var series = (FinancialSeries)d.Series[0];
+            using var d = FinancialDocument(new OhlcPoint(4, 10, 16, 8, 12, 12345)); var series = (FinancialSeries)d.Series[0];
             series.CursorField = FinancialValueField.High; series.CursorTrackEnabled = false;
             var json = ChartJson.Write(d); using var copy = ChartJson.Read(json); True(ChartJson.Write(copy) == json);
             var restored = (FinancialSeries)copy.Series[0]; True(!restored.CursorTrackEnabled && restored.CursorField == FinancialValueField.High); True(restored.Points.SequenceEqual(series.Points));
