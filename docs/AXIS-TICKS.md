@@ -24,8 +24,15 @@ Offscreen and nonpositive log-domain positions do not appear. Inversion changes 
 projection, not original values or source ordering. Secondary axes use their own settings.
 
 Automatic mode preserves the existing tick-placement algorithms. The optional invariant
-numeric format accepts G, F, N, E or P with precision 0–17, or R; empty means the original
-adaptive format. Bounding precision prevents a format such as F999999999 from allocating
+numeric format accepts G, F, N, E or P with precision 0–17, R, or .NET custom
+numeric formats such as `0.00`, `#,##0.00`, `0.0E+00` and `0.##' mV'`.
+Custom formats support grouping/scaling, percentages, scientific notation, quoted units
+and positive/negative/zero sections. The format is capped at 64 single-line characters;
+empty means the original adaptive format. Standard letter-plus-digit formats are
+recognized before the custom-format path, so excessive standard precision is still
+rejected before any formatter call. Custom syntax is validated once for all sign/zero
+sections and extreme finite magnitudes; each validation probe is limited to 2048 output
+characters. It is not revalidated on every mapped point or label. Bounding precision prevents a format such as F999999999 from allocating
 an enormous label. DateTime axes accept a validated single-line .NET date/time format of
 at most 64 characters, evaluated in UTC with invariant culture; empty retains adaptive
 calendar/time formatting. Category axes retain category labels for null/automatic text.

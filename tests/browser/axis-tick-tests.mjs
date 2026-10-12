@@ -77,10 +77,10 @@ try{
   let customDocument,customOptions;
   await scenario(prefix+': actual custom tick editing changes rendered label pixels',async()=>{
    const beforeBand=await labelBand();await click('$expander');await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectAxisTicks()).expanded);
-   await option('Mode',1);await input('Numeric format','F2');await input('Custom ticks','0|Start <&>\n2.5|Quarter\n5|Midpoint\n7.5\n10|End');
+   await option('Mode',1);await input('Numeric format','0.00');await input('Custom ticks','0|Start <&>\n2.5|Quarter\n5|Midpoint\n7.5\n10|End');
    const before=await inspect();await click('Apply ticks');await page.waitForFunction(()=>!JSON.parse(globalThis.chartBridge.InspectAxisTicks()).hasDraft);await waitRendered(before);
    customDocument=await saved();customOptions=customDocument.xAxes[0].tickOptions;
-   assert.equal(customOptions.mode,'Custom');assert.equal(customOptions.ticks.length,5);assert.equal(customOptions.ticks[3].label,null);
+   assert.equal(customOptions.mode,'Custom');assert.equal(customOptions.numericFormat,'0.00');assert.equal(customOptions.ticks.length,5);assert.equal(customOptions.ticks[3].label,null);
    const state=await ticks();for(const label of ['Start <&>','Quarter','Midpoint','7.50','End'])assert(state.labels.includes(label),label);
    const after=await labelBand();assert(!beforeBand.data.equals(after.data),'Custom labels did not change actual axis pixels');
    await page.screenshot({path:resolve(output,backend+'-'+dpr+'-custom-ticks.png'),scale:'css'});return {ticks:5,labels:state.labels.filter(s=>['Start <&>','Quarter','Midpoint','7.50','End'].includes(s))};
@@ -106,6 +106,13 @@ try{
    assert(!(await ticks()).hasDraft);const stable=await ticks(),revision=(await inspect()).revision;
    await click('Apply ticks');await frames();assert.equal((await inspect()).revision,revision);
    assert.equal((await ticks()).textConversions,stable.textConversions);
+  });
+  await scenario(prefix+': scientific custom formats apply through native numeric input',async()=>{
+   await option('$axis',1);await input('Numeric format','0.0E+00');const before=await inspect();await click('Apply ticks');await waitRendered(before);
+   assert.equal((await saved()).yAxes[0].tickOptions.numericFormat,'0.0E+00');
+   assert((await ticks()).labels.includes('0.0E+00'));assert((await ticks()).labels.includes('1.0E+00'));
+   await option('$axis',0);await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectAxisTicks()).axisId==='x');
+   assert.equal(await page.evaluate(()=>globalThis.chartBridge.TickControlText('Numeric format')),'0.00');
   });
   await scenario(prefix+': saved charts SVG and PNG include edited custom labels',async()=>{
    const json=JSON.parse((await download('Save chart',resolve(output,backend+'-'+dpr+'-chart.json'))).toString());assert.deepEqual(json.xAxes[0].tickOptions,customOptions);
