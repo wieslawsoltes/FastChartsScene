@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FastChartsScene.Charts;
 using FastChartsScene.Core;
 using FastChartsScene.Interaction;
@@ -16,6 +17,13 @@ internal static class FinancialQueryBenchmarks
         var input = new ChartInteraction(document);
         var locations = Enumerable.Range(0, 16).Select(i => frame.Layout.ToScreen(document.XAxis, document.YAxis,
             new PointD(source[i * 977].X, source[i * 977].Close))).ToArray();
+        // Report cold construction independently: do not hide source-view/index work
+        // behind the exhaustive-equivalence warmup below.
+        var allocated = GC.GetAllocatedBytesForCurrentThread(); var started = Stopwatch.GetTimestamp();
+        var cold = input.HitTestFinancial(frame, locations[0]);
+        var coldMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        var coldBytes = GC.GetAllocatedBytesForCurrentThread() - allocated;
+        if (cold == null) throw new InvalidOperationException("Initial financial query returned no sample.");
         (int Index, double Distance) Previous(PointD p)
         {
             var best = -1; var distance = 12.0;
@@ -36,6 +44,9 @@ internal static class FinancialQueryBenchmarks
         }
         measure("financial-cursor-exhaustive-50k-16-queries", () => locations.Sum(p => (double)Previous(p).Index));
         measure("financial-cursor-indexed-50k-16-queries", () => locations.Sum(p => (double)(input.HitTestFinancial(frame, p)?.Index ?? -1)));
+        measurements.Add(new { name = "financial-cursor-first-query", candles = source.Length,
+            milliseconds = coldMilliseconds, allocatedBytes = coldBytes,
+            note = "One cold query including immutable price-view creation, index construction and returned record. Scene compilation and fixture creation excluded; not a median or hardware-GPU result." });
         measurements.Add(new { name = "financial-cursor-workload", candles = source.Length, queries = locations.Length,
             input.FinancialIndexBuildCount, input.LastFinancialQueryTests,
             note = "Warm original-price cursor lookup against an equivalent exhaustive oracle. Index construction and scene rendering are excluded; not chart FPS or hardware/reference-product throughput." });
