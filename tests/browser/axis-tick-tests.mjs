@@ -1,3 +1,4 @@
+import {validateAutomaticAxes} from './automatic-axis-tests.mjs';
 import {chromium} from 'playwright';
 import {PNG} from 'pngjs';
 import assert from 'node:assert/strict';
@@ -133,6 +134,7 @@ try{
   await scenario(prefix+': reusable editor avoids unchanged writes and detaches on unload',async()=>{
    assert.equal(await page.evaluate(()=>globalThis.chartBridge.CheckTickEditorLifetime()),'passed');
   });
+  await validateAutomaticAxes(page,{prefix,backend,dpr,output,scenario,inspect,saved,waitRendered,download});
   await context.close();
  }
  assert.equal(errors.length,0,errors.join('\n'));

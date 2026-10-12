@@ -6,9 +6,9 @@ internal static class AxisTickBenchmarks
     {
         var axes = Enumerable.Range(0,128).Select(i=>new Axis("x"+i) { Range=new(-3.1,94.7) }).ToArray();
         // Frozen previous linear-tick loop, with the same range, formatter and tick target.
-        static IReadOnlyList<AxisTick> Previous(Axis axis)
+        static IReadOnlyList<AxisTick> Previous(Axis axis, int target=7)
         {
-            var step=Axis.NiceStep(Math.Max(double.Epsilon,axis.Range.Span/6));
+            var step=Axis.NiceStep(Math.Max(double.Epsilon,axis.Range.Span/(target-1)));
             var first=Math.Ceiling(axis.Range.Minimum/step-1e-12)*step;List<AxisTick> ticks=[];
             for(var i=0;i<100;i++)
             {
@@ -23,6 +23,13 @@ internal static class AxisTickBenchmarks
         double Uncached(){double count=0;foreach(var axis in axes)count+=Previous(axis).Count;return count;}
         double Cached(){double count=0;foreach(var axis in axes)count+=axis.Ticks().Count;return count;}
         measure("axis-labels-previous-128",Uncached);measure("axis-labels-retained-128",Cached);
+        // Alternating two densities formerly replaced a single cached entry each time.
+        foreach(var axis in axes)foreach(var target in new[]{4,12})
+            if(!Previous(axis,target).SequenceEqual(axis.Ticks(target))) throw new InvalidOperationException("Two-density results differ.");
+        double AlternatingPrevious(){double count=0;foreach(var axis in axes){count+=Previous(axis,4).Count;count+=Previous(axis,12).Count;}return count;}
+        double AlternatingRetained(){double count=0;foreach(var axis in axes){count+=axis.Ticks(4).Count;count+=axis.Ticks(12).Count;}return count;}
+        measure("axis-labels-alternating-previous-128x2",AlternatingPrevious);
+        measure("axis-labels-alternating-retained-128x2",AlternatingRetained);
         measurements.Add(new { name="axis-tick-cache",axes=axes.Length,generationPasses=axes.Sum(a=>a.TickGenerationCount),
             note="Identical unchanged-axis requests only. Cold generation and changed-axis updates are not cache hits. CPU only, not full-frame or GPU performance." });
     }
