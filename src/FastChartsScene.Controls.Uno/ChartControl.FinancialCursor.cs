@@ -36,12 +36,12 @@ public sealed partial class ChartControl
             if (previous != null) AutomationProperties.SetItemStatus(this, "");
         }
         else if (Document is { } d && (previous == null || previous.SeriesId != hit.SeriesId || previous.Index != hit.Index ||
-            previous.Sample != hit.Sample || previous.Field != hit.Field || _financialTextRevision != d.Revision))
+            previous.Sample != hit.Sample || previous.Field != hit.Field || previous.SnapMode != hit.SnapMode || _financialTextRevision != d.Revision))
         {
             var x = d.FindX(hit.XAxisId); var y = d.FindY(hit.YAxisId);
             string Value(double value) => y.Format(value);
             _overlay.FinancialLines = [hit.Title + " · candle " + hit.Index,
-                "X  " + x.Format(hit.Sample.X) + (x.Units.Length > 0 ? " " + x.Units : ""),
+                (hit.SnapMode == FinancialCursorSnapMode.NearestX ? "Nearest X  " : "X  ") + x.Format(hit.Sample.X) + (x.Units.Length > 0 ? " " + x.Units : ""),
                 "Open   " + Value(hit.Sample.Open), "High   " + Value(hit.Sample.High),
                 "Low    " + Value(hit.Sample.Low), "Close  " + Value(hit.Sample.Close),
                 "Volume " + hit.Sample.Volume.ToString("R", System.Globalization.CultureInfo.InvariantCulture)];

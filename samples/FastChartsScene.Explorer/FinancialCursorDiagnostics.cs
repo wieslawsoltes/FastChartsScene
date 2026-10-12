@@ -9,7 +9,7 @@ using System.Runtime.InteropServices.JavaScript;
 namespace FastChartsScene.Explorer;
 
 public sealed record FinancialCursorSnapshot(string SeriesId, string Title, int Index, OhlcPoint Sample,
-    string Field, PointD Data, PointD Screen, double Distance, RectD PaneBounds);
+    string Field, PointD Data, PointD Screen, double Distance, RectD PaneBounds, string SnapMode);
 public sealed record FinancialQuerySnapshot(FinancialCursorSnapshot? Hit, string Readout, RectD? ReadoutBounds,
     long IndexBuilds, int VisitedNodes, int TestedSamples, long TextFormats);
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
@@ -26,7 +26,7 @@ public static partial class BrowserBridge
     {
         var chart = Page!.Chart; var input = chart.Interaction; var hit = chart.FinancialHit;
         return JsonSerializer.Serialize(new FinancialQuerySnapshot(hit == null ? null : new(hit.SeriesId, hit.Title, hit.Index,
-            hit.Sample, hit.Field.ToString(), hit.Data, hit.Screen, hit.Distance, hit.PaneBounds),
+            hit.Sample, hit.Field.ToString(), hit.Data, hit.Screen, hit.Distance, hit.PaneBounds, hit.SnapMode.ToString()),
             chart.FinancialCursorText, chart.FinancialCursorBounds, input?.FinancialIndexBuildCount ?? 0,
             input?.LastFinancialQueryVisits ?? 0, input?.LastFinancialQueryTests ?? 0, chart.FinancialTextFormatCount),
             FinancialCursorJsonContext.Default.FinancialQuerySnapshot);

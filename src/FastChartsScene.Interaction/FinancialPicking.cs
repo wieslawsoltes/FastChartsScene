@@ -10,7 +10,10 @@ namespace FastChartsScene.Interaction;
 /// This is a nearest-price sample query, not interpolation, aggregation or candle-area picking.</summary>
 public sealed record FinancialDataHit(string SeriesId, string Title, int Index, OhlcPoint Sample,
     FinancialValueField Field, PointD Data, PointD Screen, double Distance,
-    string XAxisId, string YAxisId, RectD PaneBounds);
+    string XAxisId, string YAxisId, RectD PaneBounds)
+{
+    public FinancialCursorSnapMode SnapMode { get; init; }
+}
 
 public sealed partial class ChartInteraction
 {
@@ -22,7 +25,10 @@ public sealed partial class ChartInteraction
     /// <summary>Nearest visible original financial price, using each series's CursorField.
     /// Ordered data is searched within the projected tolerance window; larger unordered or
     /// duplicate groups use a retained source-space index. Equal distances prefer the last
-    /// drawn series, then the lowest original candle index. Source order is never changed.</summary>
+    /// drawn series, then the lowest original candle index. NearestX selects one visible
+    /// original price per series by horizontal distance, then vertical distance/index,
+    /// without a radial tolerance. Winners from different series are compared by full
+    /// screen distance as before. Source order is never changed.</summary>
     public FinancialDataHit? HitTestFinancial(RenderFrame frame, PointD location, double tolerance = 12)
     {
         ArgumentNullException.ThrowIfNull(frame);
@@ -41,12 +47,18 @@ public sealed partial class ChartInteraction
             if (!pane.Contains(location)) continue;
             var x = _document.FindX(series.XAxisId); var y = _document.FindY(series.YAxisId);
             var source = series.GetPriceData(series.CursorField);
-            var query = QuerySource(source, x, y, pane, location, best?.Distance ?? tolerance, false, _financialIndexes, out var built);
-            if (built) FinancialIndexBuildCount++;
+            PointQueryResult query;
+            if (series.CursorSnapMode == FinancialCursorSnapMode.NearestX)
+                query = QueryFinancialX(source, x, y, pane, location);
+            else
+            {
+                query = QuerySource(source, x, y, pane, location, Math.Min(tolerance, best?.Distance ?? tolerance), false, _financialIndexes, out var built);
+                if (built) FinancialIndexBuildCount++;
+            }
             LastFinancialQueryVisits += query.VisitedNodes; LastFinancialQueryTests += query.TestedSamples;
             if (query.Hit is { } hit && (best == null || hit.Distance < best.Distance))
                 best = new(series.Id, series.Title, hit.Index, series.Points[hit.Index], series.CursorField,
-                    hit.Data, hit.Screen, hit.Distance, x.Id, y.Id, pane);
+                    hit.Data, hit.Screen, hit.Distance, x.Id, y.Id, pane) { SnapMode = series.CursorSnapMode };
         }
         return best;
     }

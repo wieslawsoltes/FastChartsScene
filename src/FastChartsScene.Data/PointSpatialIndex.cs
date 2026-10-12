@@ -10,7 +10,7 @@ public readonly record struct PointQueryResult(IndexedPointHit? Hit, int Visited
 /// resize, inversion, logarithmic scales and transposition do not require rebuilding the tree.
 /// Construction is O(N log N) on typical input. Worst-case queries may visit every finite sample.
 /// Source data must remain immutable. Queries allocate no heap storage and share no mutable state.</summary>
-public sealed class PointSpatialIndex
+public sealed partial class PointSpatialIndex
 {
     private const int LeafSize = 32;
     private readonly IDataSource _data;

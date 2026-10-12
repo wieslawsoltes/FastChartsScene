@@ -58,6 +58,7 @@ public sealed partial class ExplorerPage
         ("Series", "Color") => "Series color as RGB or RGBA hexadecimal. Merely focusing the field never rounds the stored color.",
         ("Series", "XAxis") or ("Series", "YAxis") => "Bind this series to an existing axis by its identifier.",
         ("Series", "CursorTrackEnabled") => "Include this series in supported cursor queries without hiding or changing its data. Saved with the chart.",
+        ("Series", "CursorSnapMode") => "NearestPoint tracks within a circular pixel radius. NearestX follows the original visible candle nearest horizontally in this pane, then vertically for duplicate X. It does not interpolate prices.",
         ("Series", "CursorField") => "Original Open, High, Low or Close price tracked by the financial cursor. Close is the default; volume remains a readout field.",
         ("Series", "PointCount") => "Read-only original source count, not the reduced number of rendered vertices.",
         (_, "Title") => "Displayed title of the selected object. Escape discards an uncommitted text draft.",

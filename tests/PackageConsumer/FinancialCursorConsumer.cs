@@ -11,7 +11,7 @@ public static class FinancialCursorConsumer
 {
     public static ChartControl Create(out IDataSource immutablePriceSnapshot)
     {
-        var series = new FinancialSeries { CursorField = FinancialValueField.High, CursorTrackEnabled = true };
+        var series = new FinancialSeries { CursorField = FinancialValueField.High, CursorTrackEnabled = true, CursorSnapMode = FinancialCursorSnapMode.NearestX };
         series.SetData([new(4, 10, 16, 8, 12, 12345)]);
         immutablePriceSnapshot = series.GetPriceData(FinancialValueField.Close);
         var document = new ChartDocument { ShowLegend = false }; document.Series.Add(series); document.AutoFit();
@@ -19,6 +19,9 @@ public static class FinancialCursorConsumer
         var input = new ChartInteraction(document);
         FinancialDataHit? hit = input.HitTestFinancial(frame, frame.Layout.ToScreen(document.XAxis, document.YAxis, new PointD(4, 16)));
         if (hit?.Sample.Volume != 12345) throw new InvalidOperationException("Original volume was not available.");
+        if (hit.SnapMode != FinancialCursorSnapMode.NearestX) throw new InvalidOperationException("Snap mode was not exposed.");
+        var sourceIndex = new PointSpatialIndex(immutablePriceSnapshot);
+        _ = sourceIndex.NearestX(document.XAxis, document.YAxis, frame.Layout.Plot, hit.Screen);
         var control = new ChartControl { Document = ChartJson.Read(ChartJson.Write(document)) };
         control.FinancialHitChanged += (_, _) => { _ = control.FinancialHit; _ = control.FinancialCursorText; _ = control.FinancialCursorBounds; };
         document.Dispose(); return control;
