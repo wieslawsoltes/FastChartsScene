@@ -16,7 +16,7 @@ public sealed class AxisTicksEditor : UserControl, IDisposable
         typeof(AxisTicksEditor), new PropertyMetadata(null, (d, _) => ((AxisTicksEditor)d).Rebind()));
     public Axis? Axis { get => (Axis?)GetValue(AxisProperty); set { ObjectDisposedException.ThrowIf(_disposed, this); SetValue(AxisProperty, value); } }
     private readonly ComboBox _mode = new() { ItemsSource = Enum.GetValues<AxisTickMode>(), Header = "Tick mode" };
-    private readonly TextBox _numeric = new() { Header = "Numeric format", PlaceholderText = "Automatic, F2, E3, G17 or R", MaxLength = 3 };
+    private readonly TextBox _numeric = new() { Header = "Numeric format", PlaceholderText = "Automatic, F2, 0.00 or 0.0E+00", MaxLength = AxisTickOptions.MaximumNumericFormatLength };
     private readonly TextBox _date = new() { Header = "Date format (UTC)", PlaceholderText = "Automatic or yyyy-MM-dd", MaxLength = 64 };
     private readonly TextBox _ticks = new() { Header = "Custom ticks: value|label", AcceptsReturn = true, MinHeight = 100, MaxHeight = 180,
         MaxLength = AxisTickText.MaximumTextLength, TextWrapping = TextWrapping.NoWrap, PlaceholderText = "0|Start\n5|Middle\n10|End" };

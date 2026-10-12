@@ -6,6 +6,28 @@ internal static partial class Program
     static partial void RegisterAxisTickTests()
     {
         RegisterAxisTickPersistenceTests();
+        Add("custom numeric formats support fixed grouped scaled scientific and sign sections", () => {
+            foreach (var format in new[] { "0.00", "#,##0.00", "0.0E+00", "0.##' mV'", "0.00%;(0.00%);'zero'", "0,,.00' M'" })
+            {
+                var axis = new Axis("custom") { TickOptions = new(numericFormat: format) };
+                foreach (var value in new[] { 0d, 1.25, -1234.5, 12000000d, double.Epsilon, double.MaxValue })
+                    True(axis.Format(value) == value.ToString(format, System.Globalization.CultureInfo.InvariantCulture));
+            }
+            var fixedAxis = new Axis("fixed") { TickOptions = new(numericFormat: "0.00") };
+            True(fixedAxis.Format(1.25) == "1.25" && fixedAxis.Format(-2) == "-2.00");
+        });
+        Add("custom format validation never treats excessive standard precision as custom", () => {
+            var axis = new Axis("x"); var original = axis.TickOptions;
+            foreach (var format in new[] { "F999999999", "G999999999", "P999999999", "R17", "X2", "0.00\n", "0.00\u2028", new string('0', 65) })
+                Throws<ArgumentException>(() => axis.TickOptions = new(numericFormat: format));
+            True(ReferenceEquals(original, axis.TickOptions));
+        });
+        Add("custom numeric formats flow through automatic labels and null custom labels", () => {
+            var axis = new Axis("x") { Range = new(0, 10), TickOptions = new(numericFormat: "0.00") };
+            True(axis.Ticks().All(t => t.Label == t.Value.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)));
+            axis.TickOptions = new(AxisTickMode.Custom, [new(0), new(5, "explicit"), new(10, "")], "0.000");
+            var ticks = axis.Ticks(); True(ticks[0].Label == "0.000" && ticks[1].Label == "explicit" && ticks[2].Label == "");
+        });
         Add("tick labels and date formats reject Unicode line and paragraph separators", () => {
             foreach(var separator in new[]{'\u2028','\u2029'})
             {
