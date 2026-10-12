@@ -3,10 +3,21 @@ using FastChartsScene.Data;
 namespace FastChartsScene.Charts;
 
 public enum FinancialValueField { Open, High, Low, Close }
+public enum FinancialCursorSnapMode { NearestPoint, NearestX }
 
 public sealed partial class FinancialSeries
 {
     private FinancialValueField _cursorField = FinancialValueField.Close;
+    private FinancialCursorSnapMode _cursorSnapMode;
+
+    /// <summary>NearestPoint uses the normal logical-pixel radius. NearestX selects the
+    /// visible original price nearest horizontally anywhere in this series's pane;
+    /// vertical distance breaks equal-X ties. No interpolation or extrapolation occurs.</summary>
+    public FinancialCursorSnapMode CursorSnapMode
+    {
+        get => _cursorSnapMode;
+        set { if (!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _cursorSnapMode, value); }
+    }
     private bool _pointsOrdered = true;
     private readonly IDataSource?[] _priceSources = new IDataSource?[4];
 
