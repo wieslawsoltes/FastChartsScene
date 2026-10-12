@@ -15,9 +15,9 @@ public sealed class AxisTicksEditor : UserControl, IDisposable
     public static readonly DependencyProperty AxisProperty = DependencyProperty.Register(nameof(Axis), typeof(Axis),
         typeof(AxisTicksEditor), new PropertyMetadata(null, (d, _) => ((AxisTicksEditor)d).Rebind()));
     public Axis? Axis { get => (Axis?)GetValue(AxisProperty); set { ObjectDisposedException.ThrowIf(_disposed, this); SetValue(AxisProperty, value); } }
-    private readonly ComboBox _mode = new() { ItemsSource = Enum.GetValues<AxisTickMode>(), Header = "Tick mode" };
-    private readonly TextBox _numeric = new() { Header = "Numeric format", PlaceholderText = "Automatic, F2, 0.00 or 0.0E+00", MaxLength = AxisTickOptions.MaximumNumericFormatLength };
-    private readonly TextBox _date = new() { Header = "Date format (UTC)", PlaceholderText = "Automatic or yyyy-MM-dd", MaxLength = 64 };
+    private readonly ComboBox _mode = new() { ItemsSource = Enum.GetValues<AxisTickMode>() };
+    private readonly TextBox _numeric = new() { PlaceholderText = "Automatic, F2, 0.00 or 0.0E+00", MaxLength = AxisTickOptions.MaximumNumericFormatLength };
+    private readonly TextBox _date = new() { PlaceholderText = "Automatic or yyyy-MM-dd", MaxLength = 64 };
     private readonly TextBox _ticks = new() { Header = "Custom ticks: value|label", AcceptsReturn = true, MinHeight = 100, MaxHeight = 180,
         MaxLength = AxisTickText.MaximumTextLength, TextWrapping = TextWrapping.NoWrap, PlaceholderText = "0|Start\n5|Middle\n10|End" };
     private readonly TextBlock _error = new() { Foreground = new SolidColorBrush(Microsoft.UI.Colors.DarkRed), FontSize = 11, TextWrapping = TextWrapping.Wrap };
@@ -40,7 +40,23 @@ public sealed class AxisTicksEditor : UserControl, IDisposable
             control.FontSize = 11; control.MinHeight = 25; control.HorizontalAlignment = HorizontalAlignment.Stretch;
             AutomationProperties.SetName(control, "Ticks." + name); body.Children.Add(control);
         }
-        Add(_mode, "Mode"); Add(_numeric, "Numeric format"); Add(_date, "Date format"); Add(_ticks, "Custom ticks");
+        // Reuse the same native property/value presentation as the parent inspector.
+        // Editors remain the original instances: layout does not rebuild or commit drafts.
+        var formats = new PropertyGridControl { NameColumnWidth = 88 };
+        using (formats.BeginUpdate())
+        {
+            formats.Add("Ticks", "Mode", _mode, "Automatic positions or exact custom data-coordinate ticks.");
+            formats.Add("Ticks", "Numeric format", _numeric, "Invariant numeric format; empty retains adaptive precision.");
+            formats.Add("Ticks", "Date format", _date, "Invariant date/time format in UTC; empty uses automatic labels.");
+        }
+        foreach (var control in new Control[] { _mode, _numeric, _date })
+        {
+            control.FontSize = 11; control.MinHeight = 24;
+            control.Padding = new Thickness(4, 1, 4, 1);
+            control.HorizontalAlignment = HorizontalAlignment.Stretch;
+        }
+        body.Children.Add(formats);
+        Add(_ticks, "Custom ticks");
         body.Children.Add(new TextBlock { Text = "No pipe: automatic label. Empty label after |: tick only. All values are data coordinates; at most 512 ticks.", FontSize = 10, TextWrapping = TextWrapping.Wrap });
         var apply = new Button { Content = "Apply ticks" }; Add(apply, "Apply ticks"); apply.Click += (_, _) => ApplyDrafts();
         var reset = new Button { Content = "Reset tick drafts" }; Add(reset, "Reset tick drafts"); reset.Click += (_, _) => ResetDrafts();
