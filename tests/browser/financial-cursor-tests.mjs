@@ -10,6 +10,16 @@ export async function validateFinancialCursors(page,{inspect,scenario,output}){
  const saved=()=>page.evaluate(()=>JSON.parse(globalThis.chartBridge.ExportDocument()));
  const cursor=()=>page.evaluate(()=>JSON.parse(globalThis.chartBridge.InspectFinancialCursor()));
  const frames=()=>page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
+ async function currentFrame(){
+  // ActualWidth can update before the queued compile. Require the viewport, control,
+  // model revision and compiled frame to agree before deriving pointer coordinates.
+  await page.waitForFunction(v=>globalThis.chartBridge.FinancialFrameIsCurrent(v.width,v.height),page.viewportSize(),{timeout:45000});
+ }
+ async function paintedReadout(){
+  // FinancialHit is synchronous; FinancialCursorBounds describes the later paint.
+  // requestAnimationFrame alone does not guarantee that Uno's overlay has painted.
+  await page.waitForFunction(()=>{const s=JSON.parse(globalThis.chartBridge.InspectFinancialCursor());return s.hit&&s.readoutBounds?.width>0;});
+ }
  async function settled(before){await page.waitForFunction(p=>{const s=JSON.parse(globalThis.chartBridge.Inspect());return !s.error&&s.vertices>0&&(s.backend.startsWith('OpenGL')?s.gpuSubmissions>p.gpuSubmissions:s.overlayDraws>p.overlayDraws);},before,{timeout:45000});}
  async function select(id){await page.mouse.move(2,2);const before=await inspect();await page.evaluate(id=>globalThis.chartBridge.Command('example',id),id);await settled(before);}
  async function load(d){await page.mouse.move(2,2);const before=await inspect();await page.evaluate(d=>globalThis.chartBridge.ImportDocument(JSON.stringify(d)),d);await settled(before);}
@@ -25,13 +35,17 @@ export async function validateFinancialCursors(page,{inspect,scenario,output}){
   await load(d);return d;
  }
  async function sourcePoint(field='Close',series=0,index=0){
-  const s=await inspect();const p=await page.evaluate(([s,i,f])=>JSON.parse(globalThis.chartBridge.FinancialSourceScreen(s,i,f)),[series,index,field]);
-  return{x:s.bounds.x+p.x,y:s.bounds.y+p.y};
+  await currentFrame();
+  return page.evaluate(([s,i,f])=>{
+   const chart=JSON.parse(globalThis.chartBridge.Inspect());
+   const p=JSON.parse(globalThis.chartBridge.FinancialSourceScreen(s,i,f));
+   return{x:chart.bounds.x+p.x,y:chart.bounds.y+p.y};
+  },[series,index,field]);
  }
  async function hover(field='Close',title='Original OHLC'){
   // Independent mapping for the default fixture. Bound secondary/stacked axes use a
   // read-only host projection probe in their separate scenario below.
-  const s=await inspect();const y={Open:10,High:16,Low:8,Close:12}[field];
+  await currentFrame();const s=await inspect();const y={Open:10,High:16,Low:8,Close:12}[field];
   const p={x:s.bounds.x+s.plot.x+.4*s.plot.width,y:s.bounds.y+s.plot.y+(1-y/20)*s.plot.height};
   await page.mouse.move(p.x,p.y);
   await page.waitForFunction(([field,title])=>{const s=JSON.parse(globalThis.chartBridge.InspectFinancialCursor());return s.hit?.index===0&&s.hit.field===field&&s.hit.title===title&&s.readoutBounds?.width>0;},[field,title]);
@@ -103,13 +117,22 @@ export async function validateFinancialCursors(page,{inspect,scenario,output}){
   const d=await fixture();d.layout='Stacked';d.xAxes.push({...d.xAxes[0],id:'financial-x',minimum:.1,maximum:10,scale:'Logarithmic',inverted:true});
   d.yAxes.push({...d.yAxes[0],id:'financial-y',minimum:1,maximum:20,scale:'Logarithmic',inverted:true});d.xAxes[0].minimum=100;d.xAxes[0].maximum=200;d.yAxes[0].minimum=100;d.yAxes[0].maximum=200;
   d.series[0].xAxis='financial-x';d.series[0].yAxis='financial-y';await load(d);const p=await sourcePoint();await page.mouse.move(p.x,p.y);
-  await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectFinancialCursor()).hit?.index===0);await frames();const state=await cursor(),b=state.readoutBounds,pane=state.hit.paneBounds;
+  await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectFinancialCursor()).hit?.index===0);await paintedReadout();const state=await cursor(),b=state.readoutBounds,pane=state.hit.paneBounds;
   assert.equal(state.hit.sample.close,12);assert(b.x>=pane.x&&b.y>=pane.y&&b.x+b.width<=pane.x+pane.width&&b.y+b.height<=pane.y+pane.height);
   const chart=await inspect();await page.mouse.move(p.x,chart.bounds.y+chart.plot.y+8);await frames();assert.equal((await cursor()).hit,null);return {pane,readout:b};
  });
  await scenario('financial: same-instance host replacement refreshes exact volume and source index',async()=>{
   await fixture(true);const before=await hover();await page.evaluate(()=>globalThis.chartBridge.CheckFinancialHostReplacement());
   await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectFinancialCursor()).hit?.sample.volume===12346);const after=await cursor();assert.equal(after.indexBuilds,before.indexBuilds+1);assert(after.readout.includes('Volume 12346'));assert.equal(after.hit.seriesId,before.hit.seriesId);
+  // A host callback can mutate the same document while other cursor events are being
+  // delivered. Never publish an OHLC record from the pre-callback document revision.
+  const d=await fixture();d.series.unshift({kind:'heatmap',title:'Background cells',visible:true,cursorTrackEnabled:true,color:[1,1,1,1],xAxis:'x',yAxis:'y',strokeWidth:1,
+   grid:{columns:1,rows:1,xMinimum:0,xMaximum:10,yMinimum:0,yMaximum:20,values:[1]}});await load(d);
+  await page.evaluate(()=>globalThis.chartBridge.ArmFinancialNotificationReview());
+  try{
+   await hover();await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectFinancialCursor()).hit?.sample.volume===12346);
+   assert.equal(await page.evaluate(()=>globalThis.chartBridge.FinishFinancialNotificationReview()),'passed');
+  }finally{await page.evaluate(()=>globalThis.chartBridge.CancelFinancialNotificationReview());}
  });
  await scenario('financial: toolbar downloads persist cursor settings and complete original data',async()=>{
   const d=await fixture();await chooseField(1,'High');await hover('High');const expected=await saved();
@@ -119,7 +142,7 @@ export async function validateFinancialCursors(page,{inspect,scenario,output}){
  });
  await scenario('financial: compact viewport contains the readout and exit replacement clear public state',async()=>{
   const d=await fixture();await page.setViewportSize({width:480,height:800});await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.Inspect()).bounds.width<=480);
-  const p=await sourcePoint();await page.mouse.move(p.x,p.y);await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectFinancialCursor()).hit?.index===0);await frames();
+  const p=await sourcePoint();await page.mouse.move(p.x,p.y);await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectFinancialCursor()).hit?.index===0);await paintedReadout();
   const s=await cursor(),b=s.readoutBounds,pane=s.hit.paneBounds;assert(b.x>=pane.x&&b.y>=pane.y&&b.x+b.width<=pane.x+pane.width&&b.y+b.height<=pane.y+pane.height);
   await page.screenshot({path:resolve(output,'financial-mobile-cursor.png'),scale:'css'});await page.mouse.move(2,2);await page.waitForFunction(()=>{const s=JSON.parse(globalThis.chartBridge.InspectFinancialCursor());return s.hit===null&&s.readout===''&&s.readoutBounds===null;});
   await page.setViewportSize({width:1440,height:960});await load(d);assert.equal((await cursor()).hit,null);await hover();await select('surface');assert.equal((await cursor()).hit,null);
