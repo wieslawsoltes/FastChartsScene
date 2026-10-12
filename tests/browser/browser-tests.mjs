@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
+import { validateFinancialCursors } from './financial-cursor-tests.mjs';
 import { validateGallery } from './gallery-tests.mjs';
 import { validateCompactActions } from './responsive-tests.mjs';
 import { validateIntensity } from './intensity-tests.mjs';
@@ -151,10 +152,12 @@ try{
  });
  if(!fallback)await validateGpuLifecycle(page,{inspect,select,scenario,image});
  await validateIntensity(page,{inspect,select,scenario,output});
+ await validateFinancialCursors(page,{inspect,scenario,output:resolve(output,'financial')});
  await context.close();context=await open(2);
  for(const id of ['signals','heatmap','surface'])await scenario('DPR 2: '+id,async()=>{await select(id);return image('dpr2-'+id);});
  const intensityDpr2=resolve(output,'dpr2-intensity');await mkdir(intensityDpr2,{recursive:true});
  await validateIntensity(page,{inspect,select,scenario:(name,run)=>scenario('DPR 2: '+name,run),output:intensityDpr2});
+ await validateFinancialCursors(page,{inspect,scenario:(name,run)=>scenario('DPR 2: '+name,run),output:resolve(output,'dpr2-financial')});
  await scenario('tablet and mobile layout',async()=>{
   await select('signals');await page.setViewportSize({width:760,height:820});await waitFor(s=>s.bounds.width>300&&s.bounds.width<=760,'tablet layout');await image('tablet');
   await page.setViewportSize({width:480,height:800});await waitFor(s=>s.bounds.width>350&&s.bounds.width<=480,'mobile layout');await image('mobile');

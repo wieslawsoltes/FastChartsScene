@@ -18,7 +18,7 @@ public sealed partial class ChartInteraction
         if (!location.IsFinite) throw new ArgumentOutOfRangeException(nameof(location));
         if (_document.View != ChartView.XY || frame.Metadata.Revision != _document.Revision || !frame.Layout.Plot.Contains(location)) return null;
         if (frame.Metadata.Hits.Any(h => h.Kind == "legend" && h.Bounds.Contains(location))) return null;
-        foreach (var series in _document.Series.Reverse().OfType<HeatmapSeries>().Where(s => s.Visible && s.GetType() == typeof(HeatmapSeries)))
+        foreach (var series in _document.Series.Reverse().OfType<HeatmapSeries>().Where(s => s.Visible && s.CursorTrackEnabled && s.GetType() == typeof(HeatmapSeries)))
         {
             var pane = frame.Layout.ForAxis(series.YAxisId); if (!pane.Contains(location)) continue;
             var x = _document.FindX(series.XAxisId); var y = _document.FindY(series.YAxisId); var grid = series.Grid;

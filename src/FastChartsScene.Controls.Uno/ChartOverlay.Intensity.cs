@@ -10,7 +10,7 @@ internal sealed partial class ChartOverlay
     public ScalarDataHit? ScalarHit { get; set; }
     private void DrawScalarCursor(SKCanvas canvas, RenderFrame frame)
     {
-        if (ScalarHit is not { } hit || Hit != null || Cursor is not { } cursor || !frame.Layout.Plot.Contains(cursor) || frame.Layout.Plot.Width < 20 || frame.Layout.Plot.Height < 20) return;
+        if (ScalarHit is not { } hit || Hit != null || FinancialHit != null || Cursor is not { } cursor || !frame.Layout.Plot.Contains(cursor) || frame.Layout.Plot.Width < 20 || frame.Layout.Plot.Height < 20) return;
         canvas.Save(); canvas.ClipRect(SkiaFrameRenderer.Rect(frame.Layout.Plot));
         _paint.Style = SKPaintStyle.Stroke; _paint.StrokeWidth = 1.5f; _paint.Color = SKColors.White;
         canvas.DrawRect(SkiaFrameRenderer.Rect(hit.CellBounds), _paint);

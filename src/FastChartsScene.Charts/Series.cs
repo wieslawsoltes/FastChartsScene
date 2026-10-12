@@ -12,12 +12,14 @@ public enum AxisLayout { Layered, Stacked, Segmented }
 public abstract class Series : ObservableModel
 {
     private string _title="Series",_xAxisId="x",_yAxisId="y";
-    private bool _visible=true;
+    private bool _visible=true,_cursorTrackEnabled=true;
     private ColorRgba _color=Palette.Series[0];
     private double _strokeWidth=1.5;
     public string Id { get; }=Guid.NewGuid().ToString("N");
     public string Title { get=>_title; set=>Set(ref _title,value??""); }
     public bool Visible { get=>_visible; set=>Set(ref _visible,value); }
+    /// <summary>Allow supported cursor queries to track this series without hiding its geometry.</summary>
+    public bool CursorTrackEnabled { get=>_cursorTrackEnabled; set=>Set(ref _cursorTrackEnabled,value); }
     public ColorRgba Color { get=>_color; set=>Set(ref _color,value); }
     public string XAxisId { get=>_xAxisId; set { ArgumentException.ThrowIfNullOrWhiteSpace(value); Set(ref _xAxisId,value); } }
     public string YAxisId { get=>_yAxisId; set { ArgumentException.ThrowIfNullOrWhiteSpace(value); Set(ref _yAxisId,value); } }
@@ -64,7 +66,7 @@ public sealed class BarSeries : DataSeries
 }
 
 public readonly record struct OhlcPoint(double X,double Open,double High,double Low,double Close,double Volume=0);
-public sealed class FinancialSeries : Series
+public sealed partial class FinancialSeries : Series
 {
     private OhlcPoint[] _points=[];
     private FinancialStyle _style;
@@ -75,7 +77,7 @@ public sealed class FinancialSeries : Series
     public void SetData(ReadOnlySpan<OhlcPoint> points)
     {
         foreach(var p in points) if(!double.IsFinite(p.X)||!double.IsFinite(p.Open)||!double.IsFinite(p.High)||!double.IsFinite(p.Low)||!double.IsFinite(p.Close)||!double.IsFinite(p.Volume)||p.High<Math.Max(p.Open,p.Close)||p.Low>Math.Min(p.Open,p.Close)||p.Volume<0) throw new ArgumentException("Invalid OHLC candle.");
-        _points=points.ToArray(); _readOnlyPoints=Array.AsReadOnly(_points); Notify(nameof(Points));
+        _points=points.ToArray(); _readOnlyPoints=Array.AsReadOnly(_points); ResetPriceSources(); Notify(nameof(Points));
     }
 }
 

@@ -143,6 +143,8 @@ public sealed partial class ExplorerPage
                 var series = selected.Series; const string group = "Series";
                 Text(group, "Title", () => series.Title, v => series.Title = v);
                 Boolean(group, "Visible", () => series.Visible, v => series.Visible = v);
+                if (d.View == ChartView.XY && (series is DataSeries or FinancialSeries || series.GetType() == typeof(HeatmapSeries)))
+                    Boolean(group, "CursorTrackEnabled", () => series.CursorTrackEnabled, v => series.CursorTrackEnabled = v);
                 Text(group, "Color", () => series.Color.ToHex(), v => series.Color = ColorRgba.Parse(v));
                 Number(group, "StrokeWidth", () => series.StrokeWidth, v => series.StrokeWidth = v);
                 Choice(group, "XAxis", () => series.XAxisId, v => { d.FindX(v); series.XAxisId = v; }, d.XAxes.Select(a => a.Id).ToArray());
@@ -166,7 +168,11 @@ public sealed partial class ExplorerPage
                     Number(group, "Baseline", () => bar.Baseline, v => bar.Baseline = v);
                     Text(group, "StackGroup", () => bar.StackGroup, v => bar.StackGroup = v);
                 }
-                if (series is FinancialSeries finance) Choice(group, "Style", () => finance.Style, v => finance.Style = v, Enum.GetValues<FinancialStyle>());
+                if (series is FinancialSeries finance)
+                {
+                    Choice(group, "Style", () => finance.Style, v => finance.Style = v, Enum.GetValues<FinancialStyle>());
+                    Choice(group, "CursorField", () => finance.CursorField, v => finance.CursorField = v, Enum.GetValues<FinancialValueField>());
+                }
                 if (series is PointLineSeries3D spatial)
                 {
                     Boolean(group, "ShowLine", () => spatial.ShowLine, v => spatial.ShowLine = v);

@@ -18,9 +18,9 @@ from typing import Any
 
 MANIFEST = "validation-manifest.json"
 SUITES = {
-    "webgl": ("browser-tests.mjs", "browser-results", "browser-tests.txt", 127, "pageErrors"),
-    "skia": ("fallback-tests.mjs", "fallback-results", "fallback-tests.txt", 122, "pageErrors"),
-    "axis": ("axis-tick-tests.mjs", "axis-ticks-results", "axis-ticks-tests.txt", 44, "errors"),
+    "webgl": ("browser-tests.mjs", "browser-results", "browser-tests.txt", 145, "pageErrors"),
+    "skia": ("fallback-tests.mjs", "fallback-results", "fallback-tests.txt", 140, "pageErrors"),
+    "axis": ("axis-tick-tests.mjs", "axis-ticks-results", "axis-ticks-tests.txt", 48, "errors"),
 }
 
 
