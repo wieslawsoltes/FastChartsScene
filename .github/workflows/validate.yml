@@ -20,6 +20,10 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Test exact-build evidence verifier
+        run: |
+          mkdir -p artifacts
+          python3 -m unittest discover -s tests/ci -p 'test_*.py' -v 2>&1 | tee artifacts/ci-tests.txt
       - name: Build and test portable packages
         run: |
           mkdir -p artifacts
@@ -30,13 +34,20 @@ jobs:
         if: always()
         with:
           name: core-results
+          overwrite: true
           path: |
+            artifacts/ci-tests.txt
             artifacts/core-tests.txt
             artifacts/performance.json
             artifacts/performance.txt
   uno:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    outputs:
+      artifact_id: ${{ steps.browser_artifact.outputs.artifact-id }}
+      manifest: ${{ steps.identity.outputs.manifest }}
+      commit: ${{ steps.identity.outputs.commit }}
+      tree: ${{ steps.identity.outputs.tree }}
     steps:
       - uses: actions/checkout@v4
       - name: Preserve exact source revision
@@ -63,6 +74,11 @@ jobs:
           cp -a "$(dirname "$index")/." artifacts/site/FastChartsScene/
           touch artifacts/site/FastChartsScene/.nojekyll
           printf '{"commit":"%s","tree":"%s"}\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" > artifacts/site/FastChartsScene/revision.json
+      - name: Seal browser bundle identity and every payload file
+        id: identity
+        run: >-
+          python3 tests/ci/browser_validation.py prepare
+          --commit "$(git rev-parse HEAD)" --tree "$(git rev-parse HEAD^{tree})"
       - name: Pack and verify reusable libraries
         id: pack
         run: |
@@ -84,75 +100,132 @@ jobs:
           cp artifacts/packages/*.nupkg artifacts/extracted-project/packages/
           dotnet build artifacts/extracted-project/ExtractedChart.csproj -c Release -f net10.0-desktop 2>&1 | tee artifacts/extracted-desktop.txt
           dotnet build artifacts/extracted-project/ExtractedChart.csproj -c Release -f net10.0-browserwasm 2>&1 | tee artifacts/extracted-browser.txt
-      - uses: actions/setup-node@v4
-        if: always() && steps.site.outcome == 'success'
-        with:
-          node-version: '22'
-      - name: Install browser test dependencies
-        id: browser_dependencies
-        if: always() && steps.site.outcome == 'success'
-        working-directory: tests/browser
-        run: |
-          npm install --ignore-scripts --no-audit --no-fund --no-package-lock
-          npx playwright install --with-deps chromium
-      - name: Validate custom axis editing and rendered exports at DPR 1 and 2
-        id: axis_browser
-        if: always() && steps.browser_dependencies.outcome == 'success'
-        working-directory: tests/browser
-        run: node axis-tick-tests.mjs 2>&1 | tee ../../artifacts/axis-ticks-tests.txt
-      - name: Publish axis editor failure evidence immediately
-        if: always() && steps.axis_browser.outcome == 'failure'
+      - name: Publish the single browser build
+        id: browser_artifact
         uses: actions/upload-artifact@v4
         with:
-          name: axis-browser-failure
-          path: |
-            artifacts/axis-ticks-results
-            artifacts/axis-ticks-tests.txt
-            artifacts/source-revision.txt
+          name: browser-site
+          path: artifacts/site/FastChartsScene
+          include-hidden-files: true
           if-no-files-found: error
-      - name: Validate actual GPU application
-        id: gpu_browser
-        if: always() && steps.browser_dependencies.outcome == 'success'
-        working-directory: tests/browser
-        run: node browser-tests.mjs 2>&1 | tee ../../artifacts/browser-tests.txt
-      - name: Publish GPU failure evidence immediately
-        if: always() && steps.gpu_browser.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: gpu-browser-failure
-          path: |
-            artifacts/browser-results
-            artifacts/browser-tests.txt
-            artifacts/source-revision.txt
-          if-no-files-found: error
-      - name: Validate current-build 2D and 3D fallback
-        if: always() && steps.browser_dependencies.outcome == 'success'
-        working-directory: tests/browser
-        run: node fallback-tests.mjs 2>&1 | tee ../../artifacts/fallback-tests.txt
+          overwrite: true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: validation-evidence
-          path: |
-            artifacts/*.txt
-            artifacts/browser-results
-            artifacts/fallback-results
-            artifacts/axis-ticks-results
+          name: build-evidence
+          path: artifacts/*.txt
           if-no-files-found: error
+          overwrite: true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: source
           path: artifacts/source.zip
           if-no-files-found: error
+          overwrite: true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: packages
           path: artifacts/packages
+          if-no-files-found: error
+          overwrite: true
+
+  browser:
+    name: browser (${{ matrix.suite }})
+    needs: uno
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [axis, webgl, skia]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download this run's exact build artifact
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.uno.outputs.artifact_id }}
+          path: artifacts/site/FastChartsScene
+          merge-multiple: true
+      - name: Verify source identity and downloaded payload hashes
+        env:
+          MANIFEST_HASH: ${{ needs.uno.outputs.manifest }}
+        run: >-
+          python3 tests/ci/browser_validation.py verify
+          --commit "$(git rev-parse HEAD)" --tree "$(git rev-parse HEAD^{tree})"
+          --manifest-hash "$MANIFEST_HASH"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test dependencies
+        working-directory: tests/browser
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund --no-package-lock
+          npx playwright install --with-deps chromium
+      - name: Run unchanged browser suite and verify completed evidence
+        env:
+          SUITE: ${{ matrix.suite }}
+          MANIFEST_HASH: ${{ needs.uno.outputs.manifest }}
+          BUILD_ARTIFACT: ${{ needs.uno.outputs.artifact_id }}
+        run: >-
+          python3 tests/ci/browser_validation.py run --suite "$SUITE"
+          --commit "$(git rev-parse HEAD)" --tree "$(git rev-parse HEAD^{tree})"
+          --manifest-hash "$MANIFEST_HASH" --artifact-id "$BUILD_ARTIFACT"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: browser-site
-          path: artifacts/site/FastChartsScene
-          include-hidden-files: true
+          name: browser-evidence-${{ matrix.suite }}
+          path: |
+            artifacts/*-receipt.json
+            artifacts/*.txt
+            artifacts/browser-results
+            artifacts/fallback-results
+            artifacts/axis-ticks-results
+          if-no-files-found: error
+          overwrite: true
+
+  evidence:
+    name: Verify complete validation evidence
+    if: always()
+    needs: [core, uno, browser]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect all independent suite evidence
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          pattern: browser-evidence-*
+          path: artifacts/evidence
+          merge-multiple: false
+      - name: Include build and package verification logs
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          name: build-evidence
+          path: artifacts/evidence/build-evidence
+      - name: Include portable test and benchmark evidence
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          name: core-results
+          path: artifacts/evidence/core-results
+      - name: Require all jobs and exact-build suite receipts to pass
+        if: always()
+        env:
+          MANIFEST_HASH: ${{ needs.uno.outputs.manifest }}
+          BUILD_ARTIFACT: ${{ needs.uno.outputs.artifact_id }}
+          VALIDATION_DEPENDENCIES: '{"core":"${{ needs.core.result }}","uno":"${{ needs.uno.result }}","browser":"${{ needs.browser.result }}"}'
+        run: >-
+          python3 tests/ci/browser_validation.py aggregate --output artifacts/evidence
+          --commit "$(git rev-parse HEAD)" --tree "$(git rev-parse HEAD^{tree})"
+          --manifest-hash "$MANIFEST_HASH" --artifact-id "$BUILD_ARTIFACT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-evidence
+          path: artifacts/evidence
+          if-no-files-found: error
+          overwrite: true
