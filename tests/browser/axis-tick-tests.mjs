@@ -86,6 +86,20 @@ try{
    const after=await labelBand();assert(!beforeBand.data.equals(after.data),'Custom labels did not change actual axis pixels');
    await page.screenshot({path:resolve(output,backend+'-'+dpr+'-custom-ticks.png'),scale:'css'});return {ticks:5,labels:state.labels.filter(s=>['Start <&>','Quarter','Midpoint','7.50','End'].includes(s))};
   });
+  await scenario(prefix+': hidden pasted separators are rejected without changing tick data',async()=>{
+   for(const separator of ['\u2028','\u2029']){
+    const candidate='0|First'+separator+'1|Second';
+    await input('Custom ticks',candidate);
+    const before=await saved();
+    await click('Apply ticks');await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectAxisTicks()).error.length>0);
+    assert.deepEqual(await saved(),before,'Invalid pasted text changed the chart document');
+    assert.deepEqual((await saved()).xAxes[0].tickOptions,customOptions);
+    assert((await ticks()).hasDraft);assert.equal((await inspect()).error,null);
+    assert((await ticks()).error.includes('line separator'));
+    await page.screenshot({path:resolve(output,backend+'-'+dpr+'-invalid-separator.png'),scale:'css'});
+    await click('Reset tick drafts');await page.waitForFunction(()=>!JSON.parse(globalThis.chartBridge.InspectAxisTicks()).hasDraft&&JSON.parse(globalThis.chartBridge.InspectAxisTicks()).error==='');
+   }
+  });
   await scenario(prefix+': unrelated updates preserve invalid drafts and cached label text',async()=>{
    await input('Custom ticks','2|Duplicate A\n2|Duplicate B');const before=await ticks();
    await page.evaluate(()=>globalThis.chartBridge.CheckTickHostUpdates());await frames();const after=await ticks();
