@@ -25,30 +25,31 @@ public sealed partial class ChartInteraction
         DataHit? best = null;
         for (var s = _document.Series.Count - 1; s >= 0; s--)
         {
-            if (_document.Series[s] is not DataSeries { Visible: true } series || series.Color.A <= 0) continue;
+            if (_document.Series[s] is not DataSeries { Visible: true, CursorTrackEnabled: true } series || series.Color.A <= 0) continue;
             if (series is LineSeries { FillToBaseline: false, Marker: MarkerShape.None } line && (!line.ShowLine || line.StrokeWidth <= 0)) continue;
             var pane = frame.Layout.ForAxis(series.YAxisId); if (!pane.Contains(location)) continue;
             var x = _document.FindX(series.XAxisId); var y = _document.FindY(series.YAxisId);
             var radius = best?.Distance ?? tolerance; var transpose = series is BarSeries { Horizontal: true };
-            var first = 0; var end = series.Data.Count;
-            if (series.Data.IsOrdered)
-            {
-                (first, end) = VisibleSourceWindow(series.Data, transpose ? y : x, pane, location, radius, transpose);
-            }
-            PointQueryResult query;
-            if (end - first <= 2048)
-                query = Scan(series.Data, x, y, pane, location, radius, transpose, first, end);
-            else
-            {
-                if (!_sampleIndexes.TryGetValue(series.Data, out var index))
-                { index = new(series.Data); _sampleIndexes.Add(series.Data, index); SampleIndexBuildCount++; }
-                query = index.Nearest(x, y, pane, location, radius, transpose);
-            }
+            var query = QuerySource(series.Data, x, y, pane, location, radius, transpose, _sampleIndexes, out var built);
+            if (built) SampleIndexBuildCount++;
             LastSampleQueryVisits += query.VisitedNodes; LastSampleQueryTests += query.TestedSamples;
             if (query.Hit is { } hit && (best == null || hit.Distance < best.Distance))
                 best = new(series.Id, series.Title, hit.Index, hit.Data, hit.Screen, hit.Distance);
         }
         return best;
+    }
+    private static PointQueryResult QuerySource(IDataSource data, Axis x, Axis y, RectD pane,
+        PointD location, double radius, bool transpose, ConditionalWeakTable<IDataSource, PointSpatialIndex> indexes, out bool built)
+    {
+        built = false;
+        var first = 0; var end = data.Count;
+        if (data.IsOrdered)
+            (first, end) = VisibleSourceWindow(data, transpose ? y : x, pane, location, radius, transpose);
+        if (end - first <= 2048)
+            return Scan(data, x, y, pane, location, radius, transpose, first, end);
+        if (!indexes.TryGetValue(data, out var index))
+        { index = new(data); indexes.Add(data, index); built = true; }
+        return index.Nearest(x, y, pane, location, radius, transpose);
     }
     // Search projected positions directly instead of inverse-transforming the cursor window.
     // This preserves duplicate-X groups and boundary samples even when axis inversion would
@@ -97,5 +98,5 @@ public sealed partial class ChartInteraction
         return new(best, 0, end - first);
     }
     /// <summary>Release source indexes explicitly on host unload or when no more queries are needed.</summary>
-    public void ClearPickingCache() { _sampleIndexes.Clear(); LastSampleQueryVisits = LastSampleQueryTests = 0; }
+    public void ClearPickingCache() { _sampleIndexes.Clear(); ClearFinancialPickingCache(); LastSampleQueryVisits = LastSampleQueryTests = 0; }
 }

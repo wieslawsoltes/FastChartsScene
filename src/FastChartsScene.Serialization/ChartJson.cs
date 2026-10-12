@@ -72,7 +72,7 @@ public static partial class ChartJson
     private static void Series(Utf8JsonWriter w,Series s)
     {
         var kind=s switch { LineSeries=>"line",BandSeries=>"band",BarSeries=>"bar",ErrorBarSeries=>"error",FinancialSeries=>"financial",ContourSeries=>"contour",SurfaceSeries3D=>"surface",WaterfallSeries3D=>"waterfall",BarSeries3D=>"bars3d",PointLineSeries3D=>"points3d",MeshSeries3D=>"mesh",PieSeries=>"pie",HeatmapSeries when s.GetType()==typeof(HeatmapSeries)=>"heatmap",_=>throw new NotSupportedException("Unsupported series type: "+s.GetType().Name) };
-        w.WriteStartObject(); w.WriteString("kind",kind); w.WriteString("title",s.Title); w.WriteBoolean("visible",s.Visible); w.WriteString("xAxis",s.XAxisId); w.WriteString("yAxis",s.YAxisId); w.WriteNumber("strokeWidth",s.StrokeWidth); Color(w,"color",s.Color);
+        w.WriteStartObject(); w.WriteString("kind",kind); w.WriteString("title",s.Title); w.WriteBoolean("visible",s.Visible); w.WriteBoolean("cursorTrackEnabled",s.CursorTrackEnabled); w.WriteString("xAxis",s.XAxisId); w.WriteString("yAxis",s.YAxisId); w.WriteNumber("strokeWidth",s.StrokeWidth); Color(w,"color",s.Color);
         if(s is DataSeries data) Data(w,"data",data.Data);
         if(s is HeatmapSeries heat) { Grid(w,heat.Grid); WriteColorSettings(w,heat); }
         switch(s)
@@ -84,7 +84,7 @@ public static partial class ChartJson
             case ErrorBarSeries error: Numbers(w,"lowerErrors",error.LowerErrors.Span); Numbers(w,"upperErrors",error.UpperErrors.Span); break;
             case ContourSeries contour: Numbers(w,"levels",contour.Levels.Span); break;
             case FinancialSeries financial:
-                w.WriteString("style",financial.Style.ToString()); w.WriteStartArray("candles"); foreach(var p in financial.Points) { w.WriteStartArray(); foreach(var n in new[]{p.X,p.Open,p.High,p.Low,p.Close,p.Volume}) w.WriteNumberValue(n); w.WriteEndArray(); } w.WriteEndArray(); break;
+                w.WriteString("style",financial.Style.ToString()); w.WriteString("cursorField",financial.CursorField.ToString()); w.WriteStartArray("candles"); foreach(var p in financial.Points) { w.WriteStartArray(); foreach(var n in new[]{p.X,p.Open,p.High,p.Low,p.Close,p.Volume}) w.WriteNumberValue(n); w.WriteEndArray(); } w.WriteEndArray(); break;
             case PointLineSeries3D spatial:
                 w.WriteBoolean("showLine",spatial.ShowLine); w.WriteNumber("pointSize",spatial.PointSize); w.WriteStartArray("points"); foreach(var p in spatial.Points.Span) Position(w,p); w.WriteEndArray(); break;
             case MeshSeries3D mesh:
@@ -195,7 +195,7 @@ public static partial class ChartJson
         public Series Series(JsonElement e)
         {
             Series series=Text(e,"kind") switch { "line"=>new LineSeries(),"band"=>new BandSeries(),"bar"=>new BarSeries(),"error"=>new ErrorBarSeries(),"financial"=>new FinancialSeries(),"heatmap"=>new HeatmapSeries(),"contour"=>new ContourSeries(),"surface"=>new SurfaceSeries3D(),"waterfall"=>new WaterfallSeries3D(),"bars3d"=>new BarSeries3D(),"points3d"=>new PointLineSeries3D(),"mesh"=>new MeshSeries3D(),"pie"=>new PieSeries(),_=>throw new FormatException("Unknown series kind.") };
-            series.Title=Text(e,"title"); series.Visible=e.GetProperty("visible").GetBoolean(); series.XAxisId=Text(e,"xAxis"); series.YAxisId=Text(e,"yAxis"); series.StrokeWidth=Number(e,"strokeWidth"); series.Color=Color(e,"color");
+            series.Title=Text(e,"title"); series.Visible=e.GetProperty("visible").GetBoolean(); series.CursorTrackEnabled=!e.TryGetProperty("cursorTrackEnabled",out var tracking)||tracking.GetBoolean(); series.XAxisId=Text(e,"xAxis"); series.YAxisId=Text(e,"yAxis"); series.StrokeWidth=Number(e,"strokeWidth"); series.Color=Color(e,"color");
             if(series is DataSeries data) data.Data=Data(e.GetProperty("data"));
             if(series is HeatmapSeries heat) { heat.Grid=Grid(e.GetProperty("grid")); ReadColorSettings(e,heat); }
             switch(series)
@@ -207,7 +207,7 @@ public static partial class ChartJson
                 case ErrorBarSeries error: error.SetErrors(Numbers(e.GetProperty("lowerErrors")),Numbers(e.GetProperty("upperErrors"))); break;
                 case ContourSeries contour: contour.SetLevels(Numbers(e.GetProperty("levels"))); break;
                 case FinancialSeries financial:
-                    financial.Style=EnumValue<FinancialStyle>(e,"style"); financial.SetData(Items(e.GetProperty("candles"),limits.MaximumNumericValues/6).Select(item=> { var v=Tuple(item,6); return new OhlcPoint(v[0],v[1],v[2],v[3],v[4],v[5]); }).ToArray()); break;
+                    financial.Style=EnumValue<FinancialStyle>(e,"style"); if(e.TryGetProperty("cursorField",out _)) financial.CursorField=EnumValue<FinancialValueField>(e,"cursorField"); financial.SetData(Items(e.GetProperty("candles"),limits.MaximumNumericValues/6).Select(item=> { var v=Tuple(item,6); return new OhlcPoint(v[0],v[1],v[2],v[3],v[4],v[5]); }).ToArray()); break;
                 case PointLineSeries3D spatial:
                     spatial.ShowLine=e.GetProperty("showLine").GetBoolean(); spatial.PointSize=Number(e,"pointSize"); spatial.SetData(Items(e.GetProperty("points"),limits.MaximumNumericValues/3).Select(Position).ToArray()); break;
                 case MeshSeries3D mesh:
