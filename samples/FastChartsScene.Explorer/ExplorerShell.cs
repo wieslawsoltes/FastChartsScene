@@ -100,7 +100,7 @@ public sealed partial class ExplorerPage
         tabs.Items.Add(new PivotItem { Header = "Overview", Content = new ScrollViewer { Content = _description } }); tabs.Items.Add(new PivotItem { Header = "Data", Content = _data }); tabs.Items.Add(new PivotItem { Header = "C# usage", Content = _usage });
         Grid.SetRow(tabs, 1); _center.Children.Add(tabs); Grid.SetColumn(_center, 1); _workspace.Children.Add(_center);
         _inspectorScroll = new ScrollViewer { Content = _inspector, Background = Brush("F2F2F2"), RequestedTheme = ElementTheme.Light, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Disabled };
-        Grid.SetColumn(_inspectorScroll, 2); _workspace.Children.Add(_inspectorScroll); Grid.SetRow(_workspace, 3); _root.Children.Add(_workspace);
+        InitializePropertyPresentation(); Grid.SetColumn(_inspectorPane, 2); _workspace.Children.Add(_inspectorPane); Grid.SetRow(_workspace, 3); _root.Children.Add(_workspace);
         _status.Margin = new Thickness(10, 3, 10, 2); _status.Foreground = Brush("C6B343"); Grid.SetRow(_status, 4); _root.Children.Add(_status);
         _gallery.PreviewProvider = CreatePreview; _gallery.SetModel(_catalog, "signals"); _gallery.OpenRequested += (_, entry) => Execute(() => SelectExample(entry.Id));
         Grid.SetRow(_gallery, 1); Grid.SetRowSpan(_gallery, 3); _root.Children.Add(_gallery);
