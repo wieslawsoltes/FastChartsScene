@@ -24,7 +24,12 @@ public sealed class AxisTicksEditor : UserControl, IDisposable
     private Axis? _subscribed;
     private AxisTickOptions? _seen;
     private bool _sync, _applying, _disposed;
-    public bool HasDraft { get; private set; }
+    private readonly record struct Draft(AxisTickMode Mode, string Numeric, string Date, string Ticks);
+    private Draft _baseline = new(AxisTickMode.Automatic, "", "", "");
+    private Draft _observed = new(AxisTickMode.Automatic, "", "", "");
+    // Native text notifications can arrive after a programmatic refresh has returned.
+    // Compare actual contents with the displayed baseline, not the timing of TextChanged.
+    public bool HasDraft => !_disposed && !_sync && !Same(ReadDraft(), _baseline);
     public string ValidationError => _error.Text;
     public long TextConversionCount { get; private set; }
     public AxisTicksEditor()
@@ -40,15 +45,38 @@ public sealed class AxisTicksEditor : UserControl, IDisposable
         var apply = new Button { Content = "Apply ticks" }; Add(apply, "Apply ticks"); apply.Click += (_, _) => ApplyDrafts();
         var reset = new Button { Content = "Reset tick drafts" }; Add(reset, "Reset tick drafts"); reset.Click += (_, _) => ResetDrafts();
         body.Children.Add(_error); Content = body;
-        void Edited() { if (!_sync) { HasDraft = true; _error.Text = ""; } }
+        void Edited()
+        {
+            if (_sync || _disposed) return;
+            var current = ReadDraft();
+            if (Same(current, _observed)) return;
+            _observed = current; _error.Text = "";
+        }
         _mode.SelectionChanged += (_, _) => Edited(); _numeric.TextChanged += (_, _) => Edited();
         _date.TextChanged += (_, _) => Edited(); _ticks.TextChanged += (_, _) => Edited();
         Loaded += (_, _) => { if (!_disposed) { Attach(); Refresh(); } };
         Unloaded += (_, _) => Detach();
     }
+    private Draft ReadDraft() => new(_mode.SelectedItem is AxisTickMode mode ? mode : AxisTickMode.Automatic, _numeric.Text, _date.Text, _ticks.Text);
+    private static bool Same(Draft a, Draft b) => a.Mode == b.Mode && a.Numeric == b.Numeric && a.Date == b.Date && SameLines(a.Ticks, b.Ticks);
+    private static bool SameLines(string a, string b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        // CR, LF and CRLF are native representations of the same editor line ending.
+        // Compare without allocating a normalized copy on every model notification.
+        var i = 0; var j = 0;
+        while (i < a.Length && j < b.Length)
+        {
+            var x = a[i++]; var y = b[j++];
+            if (x == '\r') { if (i < a.Length && a[i] == '\n') i++; x = '\n'; }
+            if (y == '\r') { if (j < b.Length && b[j] == '\n') j++; y = '\n'; }
+            if (x != y) return false;
+        }
+        return i == a.Length && j == b.Length;
+    }
     private void Rebind()
     {
-        Detach(); _seen = null; HasDraft = false;
+        Detach(); _seen = null;
         if (_disposed) return;
         if (IsLoaded) Attach(); Refresh(force: true);
     }
@@ -73,7 +101,7 @@ public sealed class AxisTicksEditor : UserControl, IDisposable
             _numeric.Text = options?.NumericFormat ?? ""; _date.Text = options?.DateTimeFormat ?? "";
             if (!ReferenceEquals(_seen?.CustomTicks, options?.CustomTicks) || force)
             { _ticks.Text = options == null ? "" : AxisTickText.Write(options.CustomTicks); TextConversionCount++; }
-            _seen = options; _error.Text = ""; HasDraft = false;
+            _seen = options; _error.Text = ""; _baseline = _observed = ReadDraft();
         }
         finally { _sync = false; }
     }
@@ -86,12 +114,12 @@ public sealed class AxisTicksEditor : UserControl, IDisposable
         {
             var ticks = AxisTickText.Parse(_ticks.Text);
             var options = new AxisTickOptions(_mode.SelectedItem is AxisTickMode mode ? mode : AxisTickMode.Automatic, ticks, _numeric.Text, _date.Text);
-            _applying = true; axis.TickOptions = options; HasDraft = false; Refresh(force: true); return true;
+            _applying = true; axis.TickOptions = options; Refresh(force: true); return true;
         }
         catch (Exception error) when (error is ArgumentException or FormatException)
         { _error.Text = error.Message; return false; }
         finally { _applying = false; }
     }
-    public void ResetDrafts() { ObjectDisposedException.ThrowIf(_disposed, this); HasDraft = false; Refresh(force: true); }
+    public void ResetDrafts() { ObjectDisposedException.ThrowIf(_disposed, this); Refresh(force: true); }
     public new void Dispose() { if (_disposed) return; _disposed = true; Detach(); _seen = null; SetValue(AxisProperty, null); }
 }

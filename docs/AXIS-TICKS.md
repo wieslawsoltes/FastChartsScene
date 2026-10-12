@@ -66,6 +66,10 @@ input displays an inline error without changing the axis or rendered chart. Unre
 model notifications retain pending drafts and cached text. Changing the edited axis or
 resetting explicitly discards the previous draft, preventing edits reaching a new target.
 Unchanged Apply preserves the existing option identity and does not regenerate text.
+Draft state compares the actual field contents with a retained display snapshot rather
+than treating every delayed native TextChanged event as a user edit. CR/LF/CRLF comparison
+allocates no normalized text copy. This keeps axis-target resets and no-op Apply correct
+even when native notifications arrive after programmatic updates.
 The control detaches subscriptions on unload and releases them on explicit disposal;
 mutating its public CLR API after disposal is rejected. Unicode line/paragraph separators
 are rejected along with control characters in labels and date format strings.

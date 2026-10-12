@@ -101,6 +101,11 @@ try{
    assert.deepEqual((await saved()).xAxes[0].tickOptions,customOptions);
    await input('Numeric format','F2');const before=await inspect();await click('Apply ticks');await waitRendered(before);
    assert.equal((await saved()).yAxes[0].tickOptions.numericFormat,'F2');assert((await ticks()).labels.includes('0.00'));
+   // Switch back after the other target has produced delayed native notifications.
+   await option('$axis',0);await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.InspectAxisTicks()).axisId==='x');
+   assert(!(await ticks()).hasDraft);const stable=await ticks(),revision=(await inspect()).revision;
+   await click('Apply ticks');await frames();assert.equal((await inspect()).revision,revision);
+   assert.equal((await ticks()).textConversions,stable.textConversions);
   });
   await scenario(prefix+': saved charts SVG and PNG include edited custom labels',async()=>{
    const json=JSON.parse((await download('Save chart',resolve(output,backend+'-'+dpr+'-chart.json'))).toString());assert.deepEqual(json.xAxes[0].tickOptions,customOptions);

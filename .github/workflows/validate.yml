@@ -95,6 +95,21 @@ jobs:
         run: |
           npm install --ignore-scripts --no-audit --no-fund --no-package-lock
           npx playwright install --with-deps chromium
+      - name: Validate custom axis editing and rendered exports at DPR 1 and 2
+        id: axis_browser
+        if: always() && steps.browser_dependencies.outcome == 'success'
+        working-directory: tests/browser
+        run: node axis-tick-tests.mjs 2>&1 | tee ../../artifacts/axis-ticks-tests.txt
+      - name: Publish axis editor failure evidence immediately
+        if: always() && steps.axis_browser.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: axis-browser-failure
+          path: |
+            artifacts/axis-ticks-results
+            artifacts/axis-ticks-tests.txt
+            artifacts/source-revision.txt
+          if-no-files-found: error
       - name: Validate actual GPU application
         id: gpu_browser
         if: always() && steps.browser_dependencies.outcome == 'success'
@@ -114,10 +129,6 @@ jobs:
         if: always() && steps.browser_dependencies.outcome == 'success'
         working-directory: tests/browser
         run: node fallback-tests.mjs 2>&1 | tee ../../artifacts/fallback-tests.txt
-      - name: Validate custom axis editing and rendered exports at DPR 1 and 2
-        if: always() && steps.browser_dependencies.outcome == 'success'
-        working-directory: tests/browser
-        run: node axis-tick-tests.mjs 2>&1 | tee ../../artifacts/axis-ticks-tests.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
