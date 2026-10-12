@@ -34,6 +34,17 @@ public static partial class BrowserBridge
 #if __WASM__
     [JSExport]
 #endif
+    public static bool FinancialFrameIsCurrent(double width, double height)
+    {
+        var page = Page; var chart = page?.Chart; var frame = chart?.Frame;
+        return page != null && chart?.Document is { IsDisposed: false } document && frame != null &&
+            Math.Abs(page.ActualWidth - width) < .01 && Math.Abs(page.ActualHeight - height) < .01 &&
+            Math.Abs(frame.Metadata.Width - chart.ActualWidth) < .01 &&
+            Math.Abs(frame.Metadata.Height - chart.ActualHeight) < .01 && frame.Metadata.Revision == document.Revision;
+    }
+#if __WASM__
+    [JSExport]
+#endif
     public static string FinancialSourceScreen(int seriesIndex, int index, string field)
     {
         // Read-only geometry probe for secondary/stacked pane coordinate delivery.
@@ -51,5 +62,54 @@ public static partial class BrowserBridge
         // Explicit public-host update probe, never a synthetic cursor assignment.
         var series = (FinancialSeries)Page!.Document.Series[0]; var points = series.Points.ToArray();
         points[0] = points[0] with { Volume = points[0].Volume + 1 }; series.SetData(points);
+    }
+}
+
+public static partial class BrowserBridge
+{
+    private static Action? _cancelFinancialReview;
+    private static bool _financialReviewMutated, _financialReviewStale;
+#if __WASM__
+    [JSExport]
+#endif
+    public static void ArmFinancialNotificationReview()
+    {
+        CancelFinancialNotificationReview();
+        var chart = Page!.Chart; var document = Page.Document;
+        var series = document.Series.OfType<FinancialSeries>().Single();
+        var oldVolume = series.Points[0].Volume;
+        _financialReviewMutated = _financialReviewStale = false;
+        void ScalarChanged(object? sender, EventArgs args)
+        {
+            if (_financialReviewMutated || chart.ScalarHit == null || !ReferenceEquals(document, chart.Document)) return;
+            _financialReviewMutated = true;
+            var points = series.Points.ToArray();
+            points[0] = points[0] with { Volume = oldVolume + 1 };
+            series.SetData(points); // Real host mutation during synchronous cursor notification.
+        }
+        void FinancialChanged(object? sender, EventArgs args)
+        {
+            if (_financialReviewMutated && chart.FinancialHit is { } hit && hit.Sample.Volume == oldVolume)
+                _financialReviewStale = true;
+        }
+        chart.ScalarHitChanged += ScalarChanged; chart.FinancialHitChanged += FinancialChanged;
+        _cancelFinancialReview = () => { chart.ScalarHitChanged -= ScalarChanged; chart.FinancialHitChanged -= FinancialChanged; };
+    }
+#if __WASM__
+    [JSExport]
+#endif
+    public static string FinishFinancialNotificationReview()
+    {
+        CancelFinancialNotificationReview();
+        if (!_financialReviewMutated || _financialReviewStale)
+            throw new InvalidOperationException("Cursor event batch published a stale financial result or did not exercise the host mutation.");
+        return "passed";
+    }
+#if __WASM__
+    [JSExport]
+#endif
+    public static void CancelFinancialNotificationReview()
+    {
+        var cancel = _cancelFinancialReview; _cancelFinancialReview = null; cancel?.Invoke();
     }
 }

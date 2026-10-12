@@ -26,6 +26,9 @@ public sealed partial class ChartControl
     {
         var previous = _overlay.FinancialHit;
         var changed = !Equals(previous, hit);
+        // A new hit cannot expose the previous hit's painted rectangle. The overlay
+        // supplies fresh bounds during its next render, after the synchronous event.
+        if (changed) _overlay.FinancialBounds = null;
         _overlay.FinancialHit = hit;
         if (hit == null)
         {
@@ -54,8 +57,9 @@ public sealed partial class ChartControl
     private void UpdateCursorHits(RenderFrame frame, PointD location)
     {
         if (_input == null || Document is not { } document) { ClearCursorHits(); return; }
-        var data = _input.HitTestData(frame, location);
-        var financial = _input.HitTestFinancial(frame, location);
+        var input = _input; var revision = document.Revision;
+        var data = input.HitTestData(frame, location);
+        var financial = input.HitTestFinancial(frame, location);
         if (data != null && financial != null)
         {
             bool FinancialIsLater()
@@ -72,11 +76,19 @@ public sealed partial class ChartControl
         }
         // Query all results before raising public events. Event handlers may replace the
         // document; never subsequently publish results from the old owner in that case.
-        var scalar = _input.HitTestScalar(frame, location);
+        var scalar = input.HitTestScalar(frame, location);
+        bool StillCurrent() => !_disposed && !document.IsDisposed &&
+            ReferenceEquals(document, Document) && ReferenceEquals(input, _input) && document.Revision == revision;
+        void ClearObsoleteOwner()
+        {
+            // Document replacement clears its own state; do not clear a newly bound
+            // owner's hits. Same-instance changes invalidate every result in this batch.
+            if (ReferenceEquals(document, Document)) ClearCursorHits();
+        }
         SetDataHit(data);
-        if (!ReferenceEquals(document, Document)) return;
+        if (!StillCurrent()) { ClearObsoleteOwner(); return; }
         SetScalarHit(scalar);
-        if (!ReferenceEquals(document, Document)) return;
+        if (!StillCurrent()) { ClearObsoleteOwner(); return; }
         SetFinancialHit(financial);
     }
 }
