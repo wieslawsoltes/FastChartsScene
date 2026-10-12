@@ -47,7 +47,7 @@ public static partial class ChartJson
     {
         w.WriteStartObject(); w.WriteString("id",a.Id); w.WriteString("title",a.Title); w.WriteString("units",a.Units);
         w.WriteNumber("minimum",a.Range.Minimum); w.WriteNumber("maximum",a.Range.Maximum); w.WriteString("scale",a.Scale.ToString()); w.WriteString("side",a.Side.ToString());
-        w.WriteBoolean("inverted",a.Inverted); w.WriteNumber("weight",a.Weight); w.WriteStartArray("categories"); foreach(var label in a.Categories) w.WriteStringValue(label); w.WriteEndArray(); w.WriteEndObject();
+        w.WriteBoolean("inverted",a.Inverted); w.WriteNumber("weight",a.Weight); w.WriteStartArray("categories"); foreach(var label in a.Categories) w.WriteStringValue(label); w.WriteEndArray(); WriteTickOptions(w,a); w.WriteEndObject();
     }
     private static void Color(Utf8JsonWriter w,string name,ColorRgba c)
     {
@@ -177,7 +177,7 @@ public static partial class ChartJson
         public void ApplyAxis(JsonElement e,Axis axis)
         {
             if(axis.Id!=Text(e,"id")) throw new FormatException("Axis identity mismatch.");
-            axis.Scale=AxisScale.Linear; axis.Range=new(Number(e,"minimum"),Number(e,"maximum")); axis.Scale=EnumValue<AxisScale>(e,"scale"); axis.Title=Text(e,"title"); axis.Units=Text(e,"units"); axis.Side=EnumValue<AxisSide>(e,"side"); axis.Inverted=e.GetProperty("inverted").GetBoolean(); axis.Weight=Number(e,"weight"); axis.Categories=Strings(e.GetProperty("categories"),100000);
+            axis.Scale=AxisScale.Linear; axis.Range=new(Number(e,"minimum"),Number(e,"maximum")); axis.Scale=EnumValue<AxisScale>(e,"scale"); axis.Title=Text(e,"title"); axis.Units=Text(e,"units"); axis.Side=EnumValue<AxisSide>(e,"side"); axis.Inverted=e.GetProperty("inverted").GetBoolean(); axis.Weight=Number(e,"weight"); axis.Categories=Strings(e.GetProperty("categories"),100000); ReadTickOptions(e,axis);
         }
         private IDataSource Data(JsonElement e)
         {

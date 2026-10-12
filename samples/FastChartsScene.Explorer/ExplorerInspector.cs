@@ -10,6 +10,8 @@ namespace FastChartsScene.Explorer;
 public sealed partial class ExplorerPage
 {
     private readonly PropertyGridControl _propertyGrid = new();
+    private AxisTicksEditor? _axisTicksEditor;
+    internal AxisTicksEditor? TickEditor => _axisTicksEditor;
     private readonly TextBlock _inspectorError = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap,
         Foreground = new SolidColorBrush(Microsoft.UI.Colors.DarkRed), Visibility = Visibility.Collapsed };
     private readonly List<Action> _propertyRefresh = [];
@@ -53,6 +55,7 @@ public sealed partial class ExplorerPage
             var priorAxis = ReferenceEquals(_inspectorDocument, Chart.Document) ? _editedAxis : null;
             if (!ReferenceEquals(_inspectorDocument, Chart.Document)) _selectedInspectorSeriesId = null;
             _inspectorDocument = Chart.Document;
+            _axisTicksEditor?.Dispose(); _axisTicksEditor = null;
             _propertyRefresh.Clear(); _axisDraftReset.Clear(); _editedAxis = null; _rangeDirty = false;
             _rangeMinimum = _rangeMaximum = null; _inspectorError.Text = ""; _inspectorError.Visibility = Visibility.Collapsed;
             _propertyGrid.Clear(); _inspector.Children.Clear(); _inspector.Spacing = 4; _inspector.Padding = new Thickness(6);
@@ -88,6 +91,7 @@ public sealed partial class ExplorerPage
             {
                 if (_inspectorUpdating || generation != _inspectorGeneration || selector.SelectedItem is not AxisChoice chosen) return;
                 _editedAxis = chosen.Axis; _rangeDirty = false;
+                if (_axisTicksEditor != null) _axisTicksEditor.Axis = chosen.Axis;
                 _inspectorUpdating = true;
                 try
                 {
@@ -116,6 +120,12 @@ public sealed partial class ExplorerPage
             { _editedAxis!.Range = new AxisRange(_rangeMinimum.Value, _rangeMaximum.Value); _rangeDirty = false; RefreshInspector(); }))));
             commands.Children.Add(Compact(Button("Reset draft", () => { _rangeDirty = false; RefreshInspector(); _inspectorError.Text = ""; _inspectorError.Visibility = Visibility.Collapsed; })));
             _propertyGrid.Add("Axis", "Range commands", commands, "Apply both range bounds atomically or restore the current viewport.", true);
+            if (d.View == ChartView.XY)
+            {
+                _axisTicksEditor = new AxisTicksEditor { Axis = _editedAxis };
+                var ticks = new Expander { Header = "Ticks and labels", Content = _axisTicksEditor, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+                _propertyGrid.Add("Axis", "Ticks", ticks, "Custom data-coordinate tick positions, labels and invariant numeric/date formats.", true);
+            }
             // Only the selected object's editors are instantiated. A document may have
             // thousands of series without creating thousands of controls or frame watchers.
             var seriesOptions = d.Series.Select((s, index) => new SeriesChoice(index, s)).ToArray();

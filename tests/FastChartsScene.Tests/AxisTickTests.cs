@@ -2,8 +2,10 @@ using FastChartsScene.Core;
 namespace FastChartsScene.Tests;
 internal static partial class Program
 {
+    static partial void RegisterAxisTickPersistenceTests();
     static partial void RegisterAxisTickTests()
     {
+        RegisterAxisTickPersistenceTests();
         Add("custom ticks are owned sorted and exactly clipped before log projection", () => {
             CustomAxisTick[] ticks = [new(100,"high"), new(-1,"outside"), new(1,"low"), new(10)];
             var options = new AxisTickOptions(AxisTickMode.Custom,ticks,"F1"); ticks[0]=new(99,"mutated");

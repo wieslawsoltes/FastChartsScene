@@ -36,7 +36,7 @@ jobs:
             artifacts/performance.txt
   uno:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: Preserve exact source revision
@@ -114,6 +114,10 @@ jobs:
         if: always() && steps.browser_dependencies.outcome == 'success'
         working-directory: tests/browser
         run: node fallback-tests.mjs 2>&1 | tee ../../artifacts/fallback-tests.txt
+      - name: Validate custom axis editing and rendered exports at DPR 1 and 2
+        if: always() && steps.browser_dependencies.outcome == 'success'
+        working-directory: tests/browser
+        run: node axis-tick-tests.mjs 2>&1 | tee ../../artifacts/axis-ticks-tests.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -122,6 +126,7 @@ jobs:
             artifacts/*.txt
             artifacts/browser-results
             artifacts/fallback-results
+            artifacts/axis-ticks-results
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()

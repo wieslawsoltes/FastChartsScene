@@ -76,6 +76,7 @@ Measure("stft-per-window-spectrum",()=>OldStft().Sum());
 Measure("stft-reused-scratch",()=>Fourier.Spectrogram(signal,1024).Values.Sum());
 SampleQueryBenchmarks.Run(Measure, measurements);
 CatalogBenchmarks.Run(Measure, measurements);
+AxisTickBenchmarks.Run(Measure, measurements);
 var output=Path.GetFullPath(args.Length>0?args[0]:"artifacts/performance.json"); Directory.CreateDirectory(Path.GetDirectoryName(output)!);
 File.WriteAllText(output,JsonSerializer.Serialize(new { runtime=Environment.Version.ToString(),os=Environment.OSVersion.ToString(),
     note="CPU microbenchmarks on one CI runner; no hardware GPU, full-frame, latency or reference-product performance claim.",
