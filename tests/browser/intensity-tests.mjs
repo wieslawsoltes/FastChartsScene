@@ -64,12 +64,35 @@ export async function validateIntensity(page,{inspect,select,scenario,output}) {
  });
  await scenario('intensity invalid custom palette does not alter saved chart',async()=>{
   await fixture();const before=await save();await input('Custom stops: offset, color','0, #FF0000\n0, #00FF00\n1, #0000FF');await click('Apply custom palette');
+  await page.waitForFunction(()=>!!JSON.parse(globalThis.chartBridge.InspectIntensity()).editorError);
   assert((await state()).editorError);assert.deepEqual(await save(),before);assert.equal((await inspect()).error,null);
+ });
+ await scenario('intensity drafts survive unrelated host updates without reformatting palettes',async()=>{
+  await fixture();const original=await save();
+  const invalid='0, #FF0000\n0, #00FF00\n1, #0000FF';
+  await input('Custom stops: offset, color',invalid);
+  await input('Color minimum','3');await input('Color maximum','7');
+  await input('Missing color (RRGGBBAA)','#FF00FFFF');
+  const builds=(await state()).paletteTextBuildCount;
+  await page.evaluate(()=>{for(let i=0;i<32;i++)globalThis.chartBridge.SetIntensitySeriesTitle('Host update '+i);});
+  assert((await state()).hasDrafts);assert.equal((await state()).paletteTextBuildCount,builds);
+  const read=name=>page.evaluate(n=>globalThis.chartBridge.IntensityControlText(n),name);
+  assert.equal((await read('Custom stops: offset, color')).replace(/\r\n|\r/g,'\n'),invalid);
+  assert.equal(await read('Color minimum'),'3');assert.equal(await read('Color maximum'),'7');
+  assert.equal(await read('Missing color (RRGGBBAA)'),'#FF00FFFF');
+  await click('Apply custom palette');
+  await page.waitForFunction(()=>!!JSON.parse(globalThis.chartBridge.InspectIntensity()).editorError);
+  assert.deepEqual((await save()).series[0].colorScale,original.series[0].colorScale);
+  await click('Reset editor drafts');
+  await page.waitForFunction(()=>!JSON.parse(globalThis.chartBridge.InspectIntensity()).hasDrafts);
+  assert.equal((await state()).editorError,null);assert.equal(await read('Color minimum'),'0');assert.equal(await read('Color maximum'),'10');
+  assert.deepEqual((await save()).series[0].colorScale,original.series[0].colorScale);
+  return {hostUpdates:32,paletteTextBuildsDuringUpdates:(await state()).paletteTextBuildCount-builds-1};
  });
  await scenario('intensity manual range editor validates and commits both bounds',async()=>{
   await fixture();await input('Color minimum','4');await input('Color maximum','6');const before=await inspect();await click('Apply color range');await settle(before);
   let i=await state();assert.equal(i.series[0].minimum,4);assert.equal(i.series[0].maximum,6);assert(!i.series[0].autoRange);
-  await input('Color minimum','9');await input('Color maximum','2');await click('Apply color range');i=await state();assert(i.editorError);assert.equal(i.series[0].minimum,4);assert.equal(i.series[0].maximum,6);
+  await input('Color minimum','9');await input('Color maximum','2');await click('Apply color range');await page.waitForFunction(()=>!!JSON.parse(globalThis.chartBridge.InspectIntensity()).editorError);i=await state();assert(i.editorError);assert.equal(i.series[0].minimum,4);assert.equal(i.series[0].maximum,6);
  });
  await scenario('intensity auto-range and colorbar visibility controls reflow chart',async()=>{
   await fixture();let before=await inspect();await click('Automatic color range');await settle(before);
@@ -77,7 +100,7 @@ export async function validateIntensity(page,{inspect,select,scenario,output}) {
   before=await inspect();await click('Show colorbar');await settle(before);assert(!(await state()).series[0].colorBar);assert((await inspect()).plot.width>before.plot.width);
  });
  await scenario('intensity logarithmic mapping rejects invalid manual domain',async()=>{
-  await fixture();const saved=await save();await selectOption('Color scale',1);let i=await state();assert(i.editorError);assert.equal(i.series[0].mode,'Linear');assert.deepEqual(await save(),saved);
+  await fixture();const saved=await save();await selectOption('Color scale',1);await page.waitForFunction(()=>!!JSON.parse(globalThis.chartBridge.InspectIntensity()).editorError);let i=await state();assert(i.editorError);assert.equal(i.series[0].mode,'Linear');assert.deepEqual(await save(),saved);
   let before=await inspect();await click('Automatic color range');await settle(before);before=await inspect();await selectOption('Color scale',1);await settle(before);
   i=await state();assert.equal(i.series[0].mode,'Logarithmic');assert.equal(i.editorError,null);assert.equal(i.series[0].minimum,1);
  });

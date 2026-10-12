@@ -161,6 +161,12 @@ export async function validateProperties(page,{inspect,scenario,output}) {
   await text('Axis','Title','Owned Y axis');
   await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.ExportDocument()).yAxes[0].title==='Owned Y axis');
   assert.equal((await saved()).xAxes[0].title,original.xAxes[0].title);
+  await click('Axis','Minimum');await page.keyboard.press('Control+a');await page.keyboard.insertText('100');
+  await page.evaluate(()=>globalThis.chartBridge.SelectInspectedAxis(0));
+  await page.waitForFunction(v=>globalThis.chartBridge.PropertyText('Axis','Minimum')===String(v),original.xAxes[0].minimum);
+  await page.keyboard.press('Tab');
+  assert.equal((await saved()).xAxes[0].minimum,original.xAxes[0].minimum);
+  assert.equal((await saved()).yAxes[0].minimum,original.yAxes[0].minimum);
  });
  await scenario('properties: rejected numeric edits restore the displayed model value',async()=>{
   await select('signals');const before=await saved();

@@ -89,7 +89,15 @@ public sealed partial class ExplorerPage
                 if (_inspectorUpdating || generation != _inspectorGeneration || selector.SelectedItem is not AxisChoice chosen) return;
                 _editedAxis = chosen.Axis; _rangeDirty = false;
                 _inspectorUpdating = true;
-                try { foreach (var reset in _axisDraftReset) reset(); }
+                try
+                {
+                    foreach (var reset in _axisDraftReset) reset();
+                    // Host-driven selection may happen while a range editor is focused.
+                    // Reset both values now, rather than allowing that old target's draft
+                    // to be applied to the newly selected axis after focus finally leaves.
+                    if (_rangeMinimum != null) _rangeMinimum.Value = chosen.Axis.Range.Minimum;
+                    if (_rangeMaximum != null) _rangeMaximum.Value = chosen.Axis.Range.Maximum;
+                }
                 finally { _inspectorUpdating = false; }
                 _inspectorError.Text = ""; _inspectorError.Visibility = Visibility.Collapsed; RefreshInspector();
             };
@@ -194,6 +202,8 @@ public sealed partial class ExplorerPage
             {
                 var box = new NumberBox { Value = read() }; _propertyGrid.Add(group, name, Compact(box), DescribeProperty(group, name));
                 var updating = false;
+                if (group == "Axis") _axisDraftReset.Add(() =>
+                { updating = true; try { box.Value = read(); } finally { updating = false; } });
                 box.ValueChanged += (_, _) =>
                 {
                     if (updating || _inspectorUpdating || generation != _inspectorGeneration) return;
