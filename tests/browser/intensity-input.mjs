@@ -2,8 +2,7 @@
 export function intensityInput(page,state){
  async function bounds(name){
   await page.evaluate(n=>globalThis.chartBridge.BringIntensityControlIntoView(n),name);
-  await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
-  return page.evaluate(n=>JSON.parse(globalThis.chartBridge.IntensityControlBounds(n)),name);
+  return stableBounds(()=>page.evaluate(n=>JSON.parse(globalThis.chartBridge.IntensityControlBounds(n)),name),'Intensity control '+name);
  }
  async function click(name){const b=await bounds(name);await page.mouse.click(b.x+b.width/2,b.y+b.height/2);}
  async function stableBounds(read,label){

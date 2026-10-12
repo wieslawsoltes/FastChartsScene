@@ -17,7 +17,7 @@ namespace FastChartsScene.Explorer;
 public sealed partial record IntensitySeriesState(string Id, string Title, int Columns, int Rows, string Palette, string Interpolation,
     string Mode, bool Reversed, bool AutoRange, double? Minimum, double? Maximum, bool HasValues, bool ShowColorBar, RectD? ColorBar);
 public sealed partial record ScalarCursorState(string SeriesId, int Column, int Row, double? Value, string Color, PointD Data, RectD CellBounds);
-public sealed partial record IntensityState(IntensitySeriesState[] Series, ScalarCursorState? Cursor, string? EditorError);
+public sealed partial record IntensityState(IntensitySeriesState[] Series, ScalarCursorState? Cursor, string? EditorError, long PaletteTextBuildCount, bool HasDrafts);
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(IntensityState))]
 internal partial class IntensityJsonContext : JsonSerializerContext { }
@@ -30,6 +30,14 @@ public static partial class BrowserBridge
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(node); i++)
         { var result = FindIntensityElement(VisualTreeHelper.GetChild(node, i), predicate); if (result != null) return result; }
         return null;
+    }
+#if __WASM__
+    [JSExport]
+#endif
+    public static void SetIntensitySeriesTitle(string title)
+    {
+        var series = Page!.Document.Series.OfType<HeatmapSeries>().FirstOrDefault() ?? throw new InvalidOperationException("No intensity series.");
+        series.Title = title;
     }
     private static FrameworkElement IntensityControl(string name)
     {
@@ -55,7 +63,7 @@ public static partial class BrowserBridge
         var hit = page.Chart.ScalarHit;
         var cursor = hit == null ? null : new ScalarCursorState(hit.SeriesId, hit.Column, hit.Row, hit.Value, hit.Color.ToHex(), hit.Data, hit.CellBounds);
         var editor = FindIntensityElement(page, element => element is IntensityScaleEditor) as IntensityScaleEditor;
-        return JsonSerializer.Serialize(new IntensityState(series, cursor, editor?.LastError), IntensityJsonContext.Default.IntensityState);
+        return JsonSerializer.Serialize(new IntensityState(series, cursor, editor?.LastError, editor?.PaletteTextBuildCount ?? 0, editor?.HasDrafts ?? false), IntensityJsonContext.Default.IntensityState);
     }
 #if __WASM__
     [JSExport]
