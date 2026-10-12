@@ -30,6 +30,14 @@ A searchable gallery, property inspector, original-data preview, chart-document 
 | Extract project | Standalone Uno source ZIP containing the exact edited chart JSON; matching NuGet packages are supplied separately |
 | Frame JSON | Render metadata for diagnostics; this is not a complete saved chart |
 
+## Axis ticks and labels
+
+XY axes support exact custom tick positions and text, invariant numeric/date formats,
+and cached automatic label generation. The compact Properties Editor exposes a
+**Ticks and labels** section with atomic Apply/Reset and preserved drafts. JSON,
+SVG/PNG and extracted projects retain the settings. See the [axis tick guide](docs/AXIS-TICKS.md)
+for the reusable `AxisTickOptions`, `AxisTickText` and `AxisTicksEditor` APIs and styling boundaries.
+
 ## Intensity charts
 
 Intensity heatmaps, contours, surfaces, waterfalls and spatial bars share reusable immutable color scales. Choose gradient or stepped palettes, reverse them, use automatic/manual linear or logarithmic color ranges, and display pane-aware colorbars. Regular XY heatmaps support exact stored-cell cursor values and highlighting. The inspector uses the separately reusable `IntensityScaleEditor` control, including custom palette stops and inline validation.

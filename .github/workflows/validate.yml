@@ -36,7 +36,7 @@ jobs:
             artifacts/performance.txt
   uno:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: Preserve exact source revision
@@ -95,6 +95,21 @@ jobs:
         run: |
           npm install --ignore-scripts --no-audit --no-fund --no-package-lock
           npx playwright install --with-deps chromium
+      - name: Validate custom axis editing and rendered exports at DPR 1 and 2
+        id: axis_browser
+        if: always() && steps.browser_dependencies.outcome == 'success'
+        working-directory: tests/browser
+        run: node axis-tick-tests.mjs 2>&1 | tee ../../artifacts/axis-ticks-tests.txt
+      - name: Publish axis editor failure evidence immediately
+        if: always() && steps.axis_browser.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: axis-browser-failure
+          path: |
+            artifacts/axis-ticks-results
+            artifacts/axis-ticks-tests.txt
+            artifacts/source-revision.txt
+          if-no-files-found: error
       - name: Validate actual GPU application
         id: gpu_browser
         if: always() && steps.browser_dependencies.outcome == 'success'
@@ -122,6 +137,7 @@ jobs:
             artifacts/*.txt
             artifacts/browser-results
             artifacts/fallback-results
+            artifacts/axis-ticks-results
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()

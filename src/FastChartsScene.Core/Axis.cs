@@ -34,12 +34,13 @@ public readonly record struct AxisRange
 }
 public readonly record struct AxisTick(double Value,double Unit,string Label);
 
-public sealed class Axis : ObservableModel
+public sealed partial class Axis : ObservableModel
 {
     private string _title="",_units="";
     private string[] _categories=[];
     private AxisRange _range=new(0,10);
     private AxisScale _scale;
+    private double _logSpan;
     private bool _inverted;
     private AxisSide _side;
     private double _weight=1;
@@ -47,8 +48,17 @@ public sealed class Axis : ObservableModel
     public Axis(string id) { ArgumentException.ThrowIfNullOrWhiteSpace(id); Id=id; }
     public string Title { get=>_title; set=>Set(ref _title,value??""); }
     public string Units { get=>_units; set=>Set(ref _units,value??""); }
-    public AxisRange Range { get=>_range; set { Validate(value,_scale); Set(ref _range,value); } }
-    public AxisScale Scale { get=>_scale; set { if(!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(nameof(value)); Validate(_range,value); Set(ref _scale,value); } }
+    public AxisRange Range
+    {
+        get=>_range;
+        set { Validate(value,_scale); if (_range == value) return; _range=value; UpdateLogSpan(); Notify(); }
+    }
+    public AxisScale Scale
+    {
+        get=>_scale;
+        set { if(!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(nameof(value)); Validate(_range,value); if (_scale == value) return; _scale=value; UpdateLogSpan(); Notify(); }
+    }
+    private void UpdateLogSpan() => _logSpan = _scale == AxisScale.Logarithmic ? LogRatio(_range.Maximum, _range.Minimum) : 0;
     public bool Inverted { get=>_inverted; set=>Set(ref _inverted,value); }
     public AxisSide Side { get=>_side; set { if(!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _side,value); } }
     public double Weight { get=>_weight; set { if(!double.IsFinite(value)||value<=0) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _weight,value); } }
@@ -79,7 +89,7 @@ public sealed class Axis : ObservableModel
     public double ToUnit(double value)
     {
         if(!double.IsFinite(value)) return double.NaN;
-        var u=Scale==AxisScale.Logarithmic?(value<=0?double.NaN:LogRatio(value,Range.Minimum)/LogRatio(Range.Maximum,Range.Minimum)):
+        var u=Scale==AxisScale.Logarithmic?(value<=0?double.NaN:LogRatio(value,Range.Minimum)/_logSpan):
             (value-Range.Minimum)/Range.Span;
         return Inverted?1-u:u;
     }
@@ -88,7 +98,7 @@ public sealed class Axis : ObservableModel
         if(Inverted) unit=1-unit;
         if(unit==0) return Range.Minimum; if(unit==1) return Range.Maximum;
         if(Scale!=AxisScale.Logarithmic) return Range.Minimum+unit*Range.Span;
-        var step=unit*LogRatio(Range.Maximum,Range.Minimum);
+        var step=unit*_logSpan;
         return Math.Abs(step)<.5?Range.Minimum+Range.Minimum*ExpMinusOne(step):Math.Exp(Math.Log(Range.Minimum)+step);
     }
     public void Zoom(double anchorUnit,double factor)
@@ -100,7 +110,7 @@ public sealed class Axis : ObservableModel
     { if(!double.IsFinite(deltaUnit)) throw new ArgumentOutOfRangeException(nameof(deltaUnit)); SetFromUnits(deltaUnit,1+deltaUnit); }
     public void SetFromUnits(double a,double b)
     { var min=FromUnit(a); var max=FromUnit(b); Range=new(Math.Min(min,max),Math.Max(min,max)); }
-    public IReadOnlyList<AxisTick> Ticks(int target=7)
+    private IReadOnlyList<AxisTick> BuildAutomaticTicks(int target)
     {
         target=Math.Clamp(target,2,40); List<AxisTick> ticks=[];
         if(Scale==AxisScale.DateTime&&Range.Span>=45*86400.0&&TryCalendarTicks(target,ticks)) return ticks;
@@ -164,10 +174,11 @@ public sealed class Axis : ObservableModel
         }
         if(Scale==AxisScale.DateTime)
         {
-            var format=Range.Span>=730*86400.0?"yyyy":Range.Span>=90*86400.0?"MMM yyyy":Range.Span>86400?"MMM dd":Range.Span>120?"HH:mm:ss":"HH:mm:ss.fff";
+            var format=TickOptions.DateTimeFormat.Length != 0 ? TickOptions.DateTimeFormat : Range.Span>=730*86400.0?"yyyy":Range.Span>=90*86400.0?"MMM yyyy":Range.Span>86400?"MMM dd":Range.Span>120?"HH:mm:ss":"HH:mm:ss.fff";
             try { return DateTimeOffset.UnixEpoch.AddSeconds(value).ToString(format,CultureInfo.InvariantCulture); }
             catch(ArgumentOutOfRangeException) { return "out of date range"; }
         }
+        if (TickOptions.NumericFormat.Length != 0) return value.ToString(TickOptions.NumericFormat, CultureInfo.InvariantCulture);
         var a=Math.Abs(value);
         if(a!=0&&(a>=1e6||a<1e-4)) return value.ToString("0.###E+0",CultureInfo.InvariantCulture);
         var decimals=step>0?Math.Clamp((int)Math.Ceiling(-Math.Log10(step))+1,0,9):4;
