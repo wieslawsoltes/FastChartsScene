@@ -57,6 +57,8 @@ public sealed partial class ExplorerPage
         ("Series", "Selected series") => "Only this series's editors are constructed. Switching the selection does not change chart data.",
         ("Series", "Color") => "Series color as RGB or RGBA hexadecimal. Merely focusing the field never rounds the stored color.",
         ("Series", "XAxis") or ("Series", "YAxis") => "Bind this series to an existing axis by its identifier.",
+        ("Series", "CursorTrackEnabled") => "Include this series in supported cursor queries without hiding or changing its data. Saved with the chart.",
+        ("Series", "CursorField") => "Original Open, High, Low or Close price tracked by the financial cursor. Close is the default; volume remains a readout field.",
         ("Series", "PointCount") => "Read-only original source count, not the reduced number of rendered vertices.",
         (_, "Title") => "Displayed title of the selected object. Escape discards an uncommitted text draft.",
         (_, "Units") => "Units displayed with the selected axis title.",

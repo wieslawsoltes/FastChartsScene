@@ -25,7 +25,7 @@ internal sealed partial class ChartOverlay : SKCanvasElement,IDisposable
         {
             try { _renderer.Draw(canvas,frame,DrawGeometry); }
             catch(NotSupportedException e) { DrawMessage(canvas,e.Message,area); return; }
-            if(Cursor is { } cursor&&frame.Layout.Plot.Contains(cursor))
+            if(FinancialHit == null && Cursor is { } cursor&&frame.Layout.Plot.Contains(cursor))
             {
                 var pane=frame.Layout.Plot; _paint.Color=new SKColor(200,205,215,120); _paint.StrokeWidth=1; _paint.Style=SKPaintStyle.Stroke;
                 canvas.Save(); canvas.ClipRect(SkiaFrameRenderer.Rect(pane));
@@ -40,6 +40,7 @@ internal sealed partial class ChartOverlay : SKCanvasElement,IDisposable
                     _renderer.DrawLabel(canvas,new(FormattableString.Invariant($"X {hit.Data.X:G7}   Y {hit.Data.Y:G7}"),x+8,y+30,"#C8DCEFFF",11));
                 }
             }
+            DrawFinancialCursor(canvas,frame);
             DrawScalarCursor(canvas,frame);
             if(Selection is { } selection)
             {
