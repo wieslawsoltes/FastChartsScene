@@ -8,6 +8,14 @@ internal static partial class Program
 {
     static partial void RegisterAxisTickPersistenceTests()
     {
+        Add("custom numeric formats retain exact JSON and escaped SVG labels", () => {
+            using var d = LineDocument(); d.XAxis.TickOptions = new(AxisTickMode.Custom, [new(0), new(1), new(2)], "0.00' <mV>'");
+            var json = ChartJson.Write(d); using var restored = ChartJson.Read(json);
+            True(json == ChartJson.Write(restored));
+            var frame = new SceneCompiler().Compile(restored, 900, 600);
+            True(frame.Metadata.Labels.Any(label => label.Text == "1.00 <mV>"));
+            True(SvgExport.Write(frame).Contains("1.00 &lt;mV&gt;"));
+        });
         Add("custom tick JSON preserves labels formats and compiled scene across all axis scales", () => {
             foreach(var scale in Enum.GetValues<AxisScale>())
             {

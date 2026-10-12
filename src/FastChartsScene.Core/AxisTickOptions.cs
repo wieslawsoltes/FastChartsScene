@@ -14,6 +14,7 @@ public readonly record struct CustomAxisTick(double Value, string? Label = null)
 public sealed class AxisTickOptions
 {
     public const int MaximumTicks = 512;
+    public const int MaximumNumericFormatLength = 64;
     public const int MaximumLabelLength = 256;
     public static AxisTickOptions Default { get; } = new();
     public AxisTickMode Mode { get; }
@@ -27,7 +28,7 @@ public sealed class AxisTickOptions
         ArgumentNullException.ThrowIfNull(numericFormat); ArgumentNullException.ThrowIfNull(dateTimeFormat);
         // Bound precision as well as text length: F999999999 must never reach a formatter.
         if (numericFormat.Length != 0 && !ValidNumericFormat(numericFormat))
-            throw new ArgumentException("Use G, F, N, E or P with optional precision 0–17, R, or an empty automatic format.", nameof(numericFormat));
+            throw new ArgumentException("Use a standard format (G/F/N/E/P, precision 0–17, or R), a custom format such as 0.00, or empty for automatic. Formats are limited to 64 single-line characters.", nameof(numericFormat));
         if (dateTimeFormat.Length > 64 || dateTimeFormat.Any(IsLineBreakOrControl))
             throw new ArgumentException("Date format must be a single line of at most 64 characters.", nameof(dateTimeFormat));
         if (dateTimeFormat.Length != 0)
@@ -48,10 +49,33 @@ public sealed class AxisTickOptions
     private static bool IsLineBreakOrControl(char value) => char.IsControl(value) || value is '\u2028' or '\u2029';
     private static bool ValidNumericFormat(string format)
     {
-        if (format is "R" or "r") return true;
-        if (format.Length > 3 || !"gGfFnNeEpP".Contains(format[0])) return false;
-        return format.Length == 1 || format.AsSpan(1).IndexOfAnyExceptInRange('0', '9') < 0 &&
-            int.TryParse(format.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var digits) && digits <= 17;
+        if (format.Length > MaximumNumericFormatLength || format.Any(IsLineBreakOrControl)) return false;
+        // A single ASCII letter followed by digits is a STANDARD format even if its
+        // precision is enormous. Never pass it to the custom formatter validation path.
+        var standard = char.IsAsciiLetter(format[0]) && format.AsSpan(1).IndexOfAnyExceptInRange('0', '9') < 0;
+        if (standard)
+        {
+            if (format is "R" or "r") return true;
+            if (format.Length > 3 || !"gGfFnNeEpP".Contains(format[0])) return false;
+            return format.Length == 1 || int.TryParse(format.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var digits) && digits <= 17;
+        }
+        // Require numeric placeholders. This also rejects mistyped standard formats
+        // such as F-1 instead of silently displaying them as a constant literal label.
+        if (!format.Contains('0') && !format.Contains('#')) return false;
+        // Validation happens only when constructing immutable settings, not per sample.
+        // Custom precision/exponents/literals are bounded by format length; verify .NET
+        // accepts the syntax for every sign/zero section and extreme finite magnitudes.
+        ReadOnlySpan<double> probes = [0, 1.25, -1234.5, double.MaxValue, double.Epsilon];
+        try
+        {
+            foreach (var value in probes)
+            {
+                var label = value.ToString(format, CultureInfo.InvariantCulture);
+                if (label.Length > 2048 || label.Any(IsLineBreakOrControl)) return false;
+            }
+            return true;
+        }
+        catch (FormatException) { return false; }
     }
     public AxisTickOptions WithMode(AxisTickMode mode) => mode == Mode ? this : new(mode, CustomTicks, NumericFormat, DateTimeFormat);
     public AxisTickOptions WithFormats(string numericFormat, string dateTimeFormat) => numericFormat == NumericFormat && dateTimeFormat == DateTimeFormat ?
