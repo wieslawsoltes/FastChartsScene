@@ -86,6 +86,21 @@ try{
    const after=await labelBand();assert(!beforeBand.data.equals(after.data),'Custom labels did not change actual axis pixels');
    await page.screenshot({path:resolve(output,backend+'-'+dpr+'-custom-ticks.png'),scale:'css'});return {ticks:5,labels:state.labels.filter(s=>['Start <&>','Quarter','Midpoint','7.50','End'].includes(s))};
   });
+  await scenario(prefix+': tick formats use compact aligned native property rows',async()=>{
+   await scroll('Numeric format');
+   const boxes=await page.evaluate(()=>Object.fromEntries(['Mode','Numeric format','Date format'].map(name=>[name,JSON.parse(globalThis.chartBridge.TickControlBounds(name))])));
+   const mode=boxes['Mode'],numeric=boxes['Numeric format'],date=boxes['Date format'];
+   for(const box of [mode,numeric,date]){
+    assert(box.height>=20&&box.height<=38,'Format editor should be a compact single-row native control');
+    assert(box.width>=80,'Format value column must remain usable');
+    assert(Math.abs(box.x-numeric.x)<1,'Format editors must share the same value column');
+   }
+   assert(date.y>numeric.y&&date.y-numeric.y<=38,'Date and numeric rows must remain compact and adjacent');
+   assert(numeric.y>mode.y&&numeric.y-mode.y<=38,'Mode and numeric rows must remain compact and adjacent');
+   assert.deepEqual((await saved()).xAxes[0].tickOptions,customOptions,'Changing layout/scroll must not mutate tick settings');
+   await page.screenshot({path:resolve(output,backend+'-'+dpr+'-compact-tick-rows.png'),scale:'css'});
+   return boxes;
+  });
   await scenario(prefix+': hidden pasted separators are rejected without changing tick data',async()=>{
    for(const separator of ['\u2028','\u2029']){
     const candidate='0|First'+separator+'1|Second';
