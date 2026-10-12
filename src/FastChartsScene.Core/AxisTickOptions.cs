@@ -28,7 +28,7 @@ public sealed class AxisTickOptions
         // Bound precision as well as text length: F999999999 must never reach a formatter.
         if (numericFormat.Length != 0 && !ValidNumericFormat(numericFormat))
             throw new ArgumentException("Use G, F, N, E or P with optional precision 0–17, R, or an empty automatic format.", nameof(numericFormat));
-        if (dateTimeFormat.Length > 64 || dateTimeFormat.Any(char.IsControl))
+        if (dateTimeFormat.Length > 64 || dateTimeFormat.Any(IsLineBreakOrControl))
             throw new ArgumentException("Date format must be a single line of at most 64 characters.", nameof(dateTimeFormat));
         if (dateTimeFormat.Length != 0)
         {
@@ -38,13 +38,14 @@ public sealed class AxisTickOptions
         var owned = customTicks?.Take(MaximumTicks + 1).ToArray() ?? [];
         if (owned.Length > MaximumTicks) throw new ArgumentException($"At most {MaximumTicks} custom ticks are supported.", nameof(customTicks));
         foreach (var tick in owned)
-            if (!double.IsFinite(tick.Value) || tick.Label is { } label && (label.Length > MaximumLabelLength || label.Any(char.IsControl)))
+            if (!double.IsFinite(tick.Value) || tick.Label is { } label && (label.Length > MaximumLabelLength || label.Any(IsLineBreakOrControl)))
                 throw new ArgumentException("Tick values must be finite and labels single-line text of at most 256 characters.", nameof(customTicks));
         Array.Sort(owned, static (a, b) => a.Value.CompareTo(b.Value));
         for (var i = 1; i < owned.Length; i++) if (owned[i - 1].Value == owned[i].Value)
             throw new ArgumentException("Custom tick values must be unique.", nameof(customTicks));
         Mode = mode; CustomTicks = Array.AsReadOnly(owned); NumericFormat = numericFormat; DateTimeFormat = dateTimeFormat;
     }
+    private static bool IsLineBreakOrControl(char value) => char.IsControl(value) || value is '\u2028' or '\u2029';
     private static bool ValidNumericFormat(string format)
     {
         if (format is "R" or "r") return true;

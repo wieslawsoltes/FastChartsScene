@@ -118,6 +118,9 @@ try{
    const s=await inspect(),match=svg.match(/<text[^>]*x="([^"]+)"[^>]*>ten<\/text>/);assert(match,'Missing log midpoint label');
    assert(Math.abs(Number(match[1])-(s.plot.x+s.plot.width/2))<.01,'Log midpoint must use the bound axis');
   });
+  await scenario(prefix+': reusable editor avoids unchanged writes and detaches on unload',async()=>{
+   assert.equal(await page.evaluate(()=>globalThis.chartBridge.CheckTickEditorLifetime()),'passed');
+  });
   await context.close();
  }
  assert.equal(errors.length,0,errors.join('\n'));

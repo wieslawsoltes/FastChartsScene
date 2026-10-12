@@ -65,7 +65,10 @@ The whole candidate is parsed and validated before one TickOptions replacement. 
 input displays an inline error without changing the axis or rendered chart. Unrelated
 model notifications retain pending drafts and cached text. Changing the edited axis or
 resetting explicitly discards the previous draft, preventing edits reaching a new target.
-The control detaches subscriptions on unload and releases them on explicit disposal.
+Unchanged Apply preserves the existing option identity and does not regenerate text.
+The control detaches subscriptions on unload and releases them on explicit disposal;
+mutating its public CLR API after disposal is rejected. Unicode line/paragraph separators
+are rejected along with control characters in labels and date format strings.
 
 The explorer adds a collapsed **Ticks and labels** section to its compact XY axis
 property sheet. This keeps normal property navigation compact while exposing the new

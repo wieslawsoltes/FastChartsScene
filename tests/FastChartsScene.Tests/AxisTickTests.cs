@@ -6,6 +6,13 @@ internal static partial class Program
     static partial void RegisterAxisTickTests()
     {
         RegisterAxisTickPersistenceTests();
+        Add("tick labels and date formats reject Unicode line and paragraph separators", () => {
+            foreach(var separator in new[]{'\u2028','\u2029'})
+            {
+                Throws<ArgumentException>(()=>new AxisTickOptions(customTicks:[new(0,"left"+separator+"right")]));
+                Throws<ArgumentException>(()=>new AxisTickOptions(dateTimeFormat:"yyyy"+separator+"MM"));
+            }
+        });
         Add("custom ticks are owned sorted and exactly clipped before log projection", () => {
             CustomAxisTick[] ticks = [new(100,"high"), new(-1,"outside"), new(1,"low"), new(10)];
             var options = new AxisTickOptions(AxisTickMode.Custom,ticks,"F1"); ticks[0]=new(99,"mutated");

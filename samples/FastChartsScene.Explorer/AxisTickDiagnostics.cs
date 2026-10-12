@@ -68,10 +68,42 @@ public static partial class BrowserBridge
 #if __WASM__
     [JSExport]
 #endif
+    public static async Task<string> CheckTickEditorLifetime() => await Page!.ValidateTickEditorLifetime();
+#if __WASM__
+    [JSExport]
+#endif
     public static void CheckTickHostUpdates()
     {
         // Explicit integration probe of public host model notifications, never editor values.
         var axis = Page!.TickEditor!.Axis!;
         for (var i = 0; i < 24; i++) axis.Title = "Host-updated axis " + i;
+    }
+}
+
+public sealed partial class ExplorerPage
+{
+    internal async Task<string> ValidateTickEditorLifetime()
+    {
+        var axis = new FastChartsScene.Core.Axis("lifetime");
+        var editor = new FastChartsScene.Controls.Uno.AxisTicksEditor { Axis = axis, Width = 230, Height = 500, Opacity = 0, IsHitTestVisible = false };
+        var loaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var unloaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        editor.Loaded += (_, _) => loaded.TrySetResult(); editor.Unloaded += (_, _) => unloaded.TrySetResult();
+        try
+        {
+            _root.Children.Add(editor); await loaded.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var settings = axis.TickOptions; var conversions = editor.TextConversionCount;
+            if (!editor.ApplyDrafts() || !ReferenceEquals(settings, axis.TickOptions) || editor.TextConversionCount != conversions)
+                throw new InvalidOperationException("Unchanged Apply regenerated tick settings or text.");
+            _root.Children.Remove(editor); await unloaded.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            axis.TickOptions = new(numericFormat: "F2");
+            if (editor.TextConversionCount != conversions) throw new InvalidOperationException("Unloaded tick editor retained its model subscription.");
+            editor.Dispose(); editor.Dispose();
+            try { editor.Axis = axis; throw new InvalidOperationException("Disposed axis assignment accepted."); } catch (ObjectDisposedException) { }
+            try { editor.ApplyDrafts(); throw new InvalidOperationException("Disposed tick apply accepted."); } catch (ObjectDisposedException) { }
+            try { editor.ResetDrafts(); throw new InvalidOperationException("Disposed reset accepted."); } catch (ObjectDisposedException) { }
+            return "passed";
+        }
+        finally { _root.Children.Remove(editor); editor.Dispose(); }
     }
 }

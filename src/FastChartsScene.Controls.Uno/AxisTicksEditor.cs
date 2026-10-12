@@ -14,7 +14,7 @@ public sealed class AxisTicksEditor : UserControl, IDisposable
 {
     public static readonly DependencyProperty AxisProperty = DependencyProperty.Register(nameof(Axis), typeof(Axis),
         typeof(AxisTicksEditor), new PropertyMetadata(null, (d, _) => ((AxisTicksEditor)d).Rebind()));
-    public Axis? Axis { get => (Axis?)GetValue(AxisProperty); set => SetValue(AxisProperty, value); }
+    public Axis? Axis { get => (Axis?)GetValue(AxisProperty); set { ObjectDisposedException.ThrowIf(_disposed, this); SetValue(AxisProperty, value); } }
     private readonly ComboBox _mode = new() { ItemsSource = Enum.GetValues<AxisTickMode>(), Header = "Tick mode" };
     private readonly TextBox _numeric = new() { Header = "Numeric format", PlaceholderText = "Automatic, F2, E3, G17 or R", MaxLength = 3 };
     private readonly TextBox _date = new() { Header = "Date format (UTC)", PlaceholderText = "Automatic or yyyy-MM-dd", MaxLength = 64 };
@@ -81,6 +81,7 @@ public sealed class AxisTicksEditor : UserControl, IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (Axis is not { } axis) return false;
+        if (!HasDraft) { Refresh(); return true; }
         try
         {
             var ticks = AxisTickText.Parse(_ticks.Text);
@@ -92,5 +93,5 @@ public sealed class AxisTicksEditor : UserControl, IDisposable
         finally { _applying = false; }
     }
     public void ResetDrafts() { ObjectDisposedException.ThrowIf(_disposed, this); HasDraft = false; Refresh(force: true); }
-    public new void Dispose() { if (_disposed) return; _disposed = true; Detach(); _seen = null; Axis = null; }
+    public new void Dispose() { if (_disposed) return; _disposed = true; Detach(); _seen = null; SetValue(AxisProperty, null); }
 }
