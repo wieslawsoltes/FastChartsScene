@@ -172,6 +172,7 @@ public sealed partial class ExplorerPage
                 {
                     Choice(group, "Style", () => finance.Style, v => finance.Style = v, Enum.GetValues<FinancialStyle>());
                     Choice(group, "CursorField", () => finance.CursorField, v => finance.CursorField = v, Enum.GetValues<FinancialValueField>());
+                    Choice(group, "CursorSnapMode", () => finance.CursorSnapMode, v => finance.CursorSnapMode = v, Enum.GetValues<FinancialCursorSnapMode>());
                 }
                 if (series is PointLineSeries3D spatial)
                 {

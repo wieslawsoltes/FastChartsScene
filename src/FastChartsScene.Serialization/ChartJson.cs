@@ -84,7 +84,7 @@ public static partial class ChartJson
             case ErrorBarSeries error: Numbers(w,"lowerErrors",error.LowerErrors.Span); Numbers(w,"upperErrors",error.UpperErrors.Span); break;
             case ContourSeries contour: Numbers(w,"levels",contour.Levels.Span); break;
             case FinancialSeries financial:
-                w.WriteString("style",financial.Style.ToString()); w.WriteString("cursorField",financial.CursorField.ToString()); w.WriteStartArray("candles"); foreach(var p in financial.Points) { w.WriteStartArray(); foreach(var n in new[]{p.X,p.Open,p.High,p.Low,p.Close,p.Volume}) w.WriteNumberValue(n); w.WriteEndArray(); } w.WriteEndArray(); break;
+                w.WriteString("style",financial.Style.ToString()); w.WriteString("cursorField",financial.CursorField.ToString()); w.WriteString("cursorSnapMode",financial.CursorSnapMode.ToString()); w.WriteStartArray("candles"); foreach(var p in financial.Points) { w.WriteStartArray(); foreach(var n in new[]{p.X,p.Open,p.High,p.Low,p.Close,p.Volume}) w.WriteNumberValue(n); w.WriteEndArray(); } w.WriteEndArray(); break;
             case PointLineSeries3D spatial:
                 w.WriteBoolean("showLine",spatial.ShowLine); w.WriteNumber("pointSize",spatial.PointSize); w.WriteStartArray("points"); foreach(var p in spatial.Points.Span) Position(w,p); w.WriteEndArray(); break;
             case MeshSeries3D mesh:
@@ -207,7 +207,7 @@ public static partial class ChartJson
                 case ErrorBarSeries error: error.SetErrors(Numbers(e.GetProperty("lowerErrors")),Numbers(e.GetProperty("upperErrors"))); break;
                 case ContourSeries contour: contour.SetLevels(Numbers(e.GetProperty("levels"))); break;
                 case FinancialSeries financial:
-                    financial.Style=EnumValue<FinancialStyle>(e,"style"); if(e.TryGetProperty("cursorField",out _)) financial.CursorField=EnumValue<FinancialValueField>(e,"cursorField"); financial.SetData(Items(e.GetProperty("candles"),limits.MaximumNumericValues/6).Select(item=> { var v=Tuple(item,6); return new OhlcPoint(v[0],v[1],v[2],v[3],v[4],v[5]); }).ToArray()); break;
+                    financial.Style=EnumValue<FinancialStyle>(e,"style"); if(e.TryGetProperty("cursorField",out _)) financial.CursorField=EnumValue<FinancialValueField>(e,"cursorField"); if(e.TryGetProperty("cursorSnapMode",out _)) financial.CursorSnapMode=EnumValue<FinancialCursorSnapMode>(e,"cursorSnapMode"); financial.SetData(Items(e.GetProperty("candles"),limits.MaximumNumericValues/6).Select(item=> { var v=Tuple(item,6); return new OhlcPoint(v[0],v[1],v[2],v[3],v[4],v[5]); }).ToArray()); break;
                 case PointLineSeries3D spatial:
                     spatial.ShowLine=e.GetProperty("showLine").GetBoolean(); spatial.PointSize=Number(e,"pointSize"); spatial.SetData(Items(e.GetProperty("points"),limits.MaximumNumericValues/3).Select(Position).ToArray()); break;
                 case MeshSeries3D mesh:

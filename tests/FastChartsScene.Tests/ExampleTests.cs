@@ -5,10 +5,11 @@ internal static partial class Program
 {
     static partial void RegisterFinancialCursorTests();
     static partial void RegisterFinancialXTests();
+    static partial void RegisterFinancialXPersistenceTests();
     static partial void RegisterAxisTickTextReviewTests();
     static partial void RegisterExampleTests()
     {
-        RegisterFinancialXTests(); RegisterFinancialCursorTests(); RegisterAxisTickTextReviewTests();
+        RegisterFinancialXPersistenceTests(); RegisterFinancialXTests(); RegisterFinancialCursorTests(); RegisterAxisTickTextReviewTests();
         foreach(var example in ExampleCatalog.All)
             Add("example compiles: "+example.Id,()=> { using var d=example.Create(); var f=new SceneCompiler().Compile(d,1280,720); f.Validate(); True(f.Metadata.VertexCount>0); True(d.Validate().Count==0); });
         RegisterAutomaticLabelTests(); RegisterAxisTickTests(); RegisterPointPickingTests(); RegisterInteractionReviewTests(); RegisterOrderedCursorTests(); RegisterCatalogTests(); RegisterProjectExportTests();

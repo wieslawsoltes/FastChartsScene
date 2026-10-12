@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {PNG} from 'pngjs';
+import {validateFinancialX} from './financial-x-tests.mjs';
 import {resolve} from 'node:path';
 import {mkdir,readFile} from 'node:fs/promises';
 
@@ -147,5 +148,6 @@ export async function validateFinancialCursors(page,{inspect,scenario,output}){
   await page.screenshot({path:resolve(output,'financial-mobile-cursor.png'),scale:'css'});await page.mouse.move(2,2);await page.waitForFunction(()=>{const s=JSON.parse(globalThis.chartBridge.InspectFinancialCursor());return s.hit===null&&s.readout===''&&s.readoutBounds===null;});
   await page.setViewportSize({width:1440,height:960});await load(d);assert.equal((await cursor()).hit,null);await hover();await select('surface');assert.equal((await cursor()).hit,null);
  });
+ await validateFinancialX(page,{inspect,scenario,output,fixture,load,select,hover,cursor,saved,currentFrame,frames,property,stable,sourcePoint,paintedReadout,chooseField,download});
  await select('signals');
 }
