@@ -17,9 +17,37 @@ export async function validateProperties(page,{inspect,scenario,output}) {
   }
   throw new Error('Property control did not become actionable: '+JSON.stringify(raw));
  }
+ async function propertyBounds(category,name){
+  // Group expansion and focus may enqueue their own bring-into-view requests. A single
+  // programmatic request can be superseded. Scroll with real pointer input and wait for
+  // the target to remain inside its actual scrolling viewport, not just the browser.
+  const end=Date.now()+15000;let previous=null,stableSince=0,nextWheel=0,last;
+  while(Date.now()<end){
+   await frames();
+   last=await page.evaluate(([c,n])=>({
+    target:JSON.parse(globalThis.chartBridge.PropertyBounds(c,n)),
+    viewport:JSON.parse(globalThis.chartBridge.PropertyViewportBounds(c,n))
+   }),[category,name]);
+   const b=last.target,v=last.viewport,w=page.viewportSize();
+   const inside=b.width>1&&b.height>1&&b.x>=v.x-1&&b.x+b.width<=v.x+v.width+1&&
+    b.y>=v.y-1&&b.y+b.height<=v.y+v.height+1&&b.x>=0&&b.y>=0&&b.x+b.width<=w.width+1&&b.y+b.height<=w.height+1;
+   const same=inside&&previous&&['x','y','width','height'].every(k=>Math.abs(b[k]-previous[k])<.1);
+   if(!same)stableSince=Date.now();
+   if(same&&Date.now()-stableSince>=250)return b;
+   previous=inside?b:null;
+   if(!inside&&Date.now()>=nextWheel){
+    assert(v.width>1&&v.height>1&&v.x>=0&&v.y>=0&&v.x+v.width<=w.width+1&&v.y+v.height<=w.height+1,'Inspector viewport must be visible');
+    const delta=Math.max(-600,Math.min(600,b.y+b.height/2-v.y-v.height/2));
+    assert(Math.abs(delta)>1,'Property is horizontally clipped, not vertically scrollable');
+    // Use the name gutter so NumberBox wheel editing cannot alter a chart value.
+    await page.mouse.move(v.x+Math.min(35,v.width/4),v.y+v.height/2);
+    await page.mouse.wheel(0,delta);nextWheel=Date.now()+200;
+   }
+  }
+  throw new Error('Property remained outside its viewport after real wheel scrolling: '+JSON.stringify({category,name,...last}));
+ }
  async function click(category,name){
-  await page.evaluate(([c,n])=>globalThis.chartBridge.BringPropertyIntoView(c,n),[category,name]);
-  const b=await bounds(()=>page.evaluate(([c,n])=>JSON.parse(globalThis.chartBridge.PropertyBounds(c,n)),[category,name]));
+  const b=await propertyBounds(category,name);
   // Checkbox glyph is left-aligned within the value column; clicking its padded right side
   // is not guaranteed to hit the native glyph. Text/numeric editors accept the center.
   const isCheck=await page.evaluate(([c,n])=>['true','false'].includes(globalThis.chartBridge.PropertyText(c,n)),[category,name]).catch(()=>false);
