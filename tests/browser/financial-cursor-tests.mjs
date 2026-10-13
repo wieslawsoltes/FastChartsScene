@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {PNG} from 'pngjs';
+import {validateCursorTable} from './cursor-table-tests.mjs';
 import {validateFinancialX} from './financial-x-tests.mjs';
 import {resolve} from 'node:path';
 import {mkdir,readFile} from 'node:fs/promises';
@@ -149,5 +150,6 @@ export async function validateFinancialCursors(page,{inspect,scenario,output}){
   await page.setViewportSize({width:1440,height:960});await load(d);assert.equal((await cursor()).hit,null);await hover();await select('surface');assert.equal((await cursor()).hit,null);
  });
  await validateFinancialX(page,{inspect,scenario,output,fixture,load,select,hover,cursor,saved,currentFrame,frames,property,stable,sourcePoint,paintedReadout,chooseField,download});
+ await validateCursorTable(page,{inspect,scenario,output,fixture,load,select,hover,cursor,saved,currentFrame,frames,property,stable,sourcePoint,paintedReadout,chooseField,download});
  await select('signals');
 }

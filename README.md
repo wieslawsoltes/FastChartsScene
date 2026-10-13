@@ -30,6 +30,14 @@ A searchable gallery, property inspector, original-data preview, chart-document 
 | Extract project | Standalone Uno source ZIP containing the exact edited chart JSON; matching NuGet packages are supplied separately |
 | Frame JSON | Render metadata for diagnostics; this is not a complete saved chart |
 
+## Simultaneous cursor values
+
+**Cursor table** opens a native, virtualized result table for every eligible line/scatter
+and financial series in the hovered pane. It shows original nearest-X samples, supports
+Hold, full-precision details and CSV export, and reuses row objects and source indexes.
+The query and control are independently reusable. See [the cursor table guide](docs/SERIES-CURSOR-TABLE.md)
+for family coverage, snapshot/lifecycle contracts, formatting and validation boundaries.
+
 ## Axis ticks and labels
 
 XY axes support exact custom tick positions and text, invariant numeric/date formats,
