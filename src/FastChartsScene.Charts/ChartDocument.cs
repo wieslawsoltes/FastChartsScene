@@ -48,7 +48,7 @@ public sealed class Camera3D : ObservableModel
 }
 
 /// <summary>Renderer-independent, UI-thread-affine chart model. Nested updates coalesce notifications.</summary>
-public sealed class ChartDocument : ObservableModel,IDisposable
+public sealed partial class ChartDocument : ObservableModel,IDisposable
 {
     private string _title="FastChartsScene",_subtitle="";
     private ChartView _view;
@@ -95,8 +95,6 @@ public sealed class ChartDocument : ObservableModel,IDisposable
         foreach(var item in current.Except(_observed)) item.PropertyChanged+=ModelChanged;
         _observed.Clear(); _observed.UnionWith(current); Invalidate();
     }
-    public Axis FindX(string id)=>XAxes.FirstOrDefault(a=>a.Id==id)??throw new InvalidOperationException($"Unknown X axis '{id}'.");
-    public Axis FindY(string id)=>YAxes.FirstOrDefault(a=>a.Id==id)??throw new InvalidOperationException($"Unknown Y axis '{id}'.");
     public IDisposable BeginUpdate()
     {
         ObjectDisposedException.ThrowIf(_disposed,this); _updateDepth++; return new UpdateScope(this);
