@@ -40,7 +40,7 @@ public sealed partial class ChartInteraction
         {
             if (!_cursorSegmentIndexes.TryGetValue(data, out var index))
             {
-                index = new(data); _cursorSegmentIndexes.Add(data, index);
+                index = RetainSourceIndex(_cursorSegmentIndexes, data, new CursorSegmentIndex(data));
                 CursorInterpolationIndexBuildCount++;
             }
             index.Visit(ref query);

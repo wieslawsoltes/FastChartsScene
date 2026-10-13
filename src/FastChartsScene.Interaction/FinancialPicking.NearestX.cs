@@ -61,7 +61,7 @@ public sealed partial class ChartInteraction
             }
             if (left < first && right >= end) return new(best, 0, scanned);
         }
-        var indexTree = new PointSpatialIndex(data); indexes.Add(data, indexTree); built = true;
+        var indexTree = RetainSourceIndex(indexes, data, new PointSpatialIndex(data)); built = true;
         var query = indexTree.NearestX(x, y, pane, location);
         return query with { TestedSamples = scanned + query.TestedSamples };
     }

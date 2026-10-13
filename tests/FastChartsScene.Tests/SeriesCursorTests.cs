@@ -9,7 +9,7 @@ internal static partial class Program
 {
     static partial void RegisterSeriesCursorTests()
     {
-        RegisterInterpolatedCursorTests();
+        RegisterInterpolatedCursorTests(); RegisterPickingCacheReentryTests();
         Add("series table returns all original line and financial values in document order", () => {
             using var d = FinancialDocument(new OhlcPoint(4, 10, 16, 8, 12, 12345));
             var line = new LineSeries { Title = "Average", Data = new XyData([3, 5], [5, 7]) }; d.Series.Add(line);

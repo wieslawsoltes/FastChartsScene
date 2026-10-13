@@ -48,7 +48,7 @@ public sealed partial class ChartInteraction
         if (end - first <= 2048)
             return Scan(data, x, y, pane, location, radius, transpose, first, end);
         if (!indexes.TryGetValue(data, out var index))
-        { index = new(data); indexes.Add(data, index); built = true; }
+        { index = RetainSourceIndex(indexes, data, new PointSpatialIndex(data)); built = true; }
         return index.Nearest(x, y, pane, location, radius, transpose);
     }
     // Search projected positions directly instead of inverse-transforming the cursor window.
