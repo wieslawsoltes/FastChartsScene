@@ -5,10 +5,23 @@ using FastChartsScene.Rendering;
 
 namespace FastChartsScene.Interaction;
 
-/// <summary>One original source value. Contains no pointer-dependent distance, screen
-/// coordinate or mutable source reference, so a copied value is a stable snapshot.</summary>
+public enum SeriesCursorTrackingMode { NearestX, Interpolated }
+
+/// <summary>A calculated value and its second original endpoint. The first original
+/// endpoint remains in SeriesCursorValue.Index/Data. No source reference is retained.</summary>
+public readonly record struct SeriesCursorInterpolation(PointD Result, int EndIndex,
+    PointD EndData, LineInterpolation Method);
+
+/// <summary>One original sample, or the first original endpoint of a calculated value.
+/// Data/Index never masquerade as a calculated sample. ResultData is the display value;
+/// Interpolation records both the calculation and its second original endpoint.</summary>
 public readonly record struct SeriesCursorValue(string SeriesId, string Title, ColorRgba Color,
-    int Index, PointD Data, string XAxisId, string YAxisId, FinancialValueField? Field, OhlcPoint? Candle);
+    int Index, PointD Data, string XAxisId, string YAxisId, FinancialValueField? Field, OhlcPoint? Candle)
+{
+    public SeriesCursorInterpolation? Interpolation { get; init; }
+    public PointD ResultData => Interpolation?.Result ?? Data;
+    public bool IsInterpolated => Interpolation.HasValue;
+}
 
 public sealed partial class ChartInteraction
 {
@@ -25,10 +38,19 @@ public sealed partial class ChartInteraction
     /// Invalid arguments leave output unchanged; stale/off-plot frames clear it.
     /// Models and output are UI-thread-affine. Custom sources must honor IDataSource.</summary>
     public void QuerySeriesCursorValues(RenderFrame frame, PointD location, List<SeriesCursorValue> output)
+        => QuerySeriesCursorValues(frame, location, output, SeriesCursorTrackingMode.NearestX);
+
+    /// <summary>Interpolated mode intersects original linear/step segments with the
+    /// pointer's screen-X, selecting the closest visible crossing vertically. Original
+    /// endpoints are retained separately. Financial, scatter-only and cubic series keep
+    /// explicitly original nearest-X values. Gaps are never bridged or extrapolated.</summary>
+    public void QuerySeriesCursorValues(RenderFrame frame, PointD location, List<SeriesCursorValue> output,
+        SeriesCursorTrackingMode mode)
     {
         ArgumentNullException.ThrowIfNull(frame); ArgumentNullException.ThrowIfNull(output);
         ObjectDisposedException.ThrowIf(_document.IsDisposed, _document);
         if (!location.IsFinite) throw new ArgumentOutOfRangeException(nameof(location));
+        if (!Enum.IsDefined(mode)) throw new ArgumentOutOfRangeException(nameof(mode));
         LastCursorValuesTests = 0; output.Clear();
         if (_document.View != ChartView.XY || frame.Metadata.Revision != _document.Revision || !frame.Layout.Plot.Contains(location)) return;
         foreach (var region in frame.Metadata.Hits)
@@ -52,6 +74,15 @@ public sealed partial class ChartInteraction
             else continue;
             var pane = frame.Layout.ForAxis(series.YAxisId); if (!pane.Contains(location)) continue;
             var x = _document.FindX(series.XAxisId); var y = _document.FindY(series.YAxisId);
+            if (mode == SeriesCursorTrackingMode.Interpolated && series is LineSeries { ShowLine: true, StrokeWidth: > 0 } traced &&
+                traced.Interpolation != LineInterpolation.MonotoneCubic)
+            {
+                var crossing = QueryInterpolatedLine(data, traced.Interpolation, x, y, pane, location);
+                if (crossing is { } value)
+                    output.Add(new(series.Id, series.Title, series.Color, value.Index, value.Data, x.Id, y.Id, null, null)
+                    { Interpolation = value.Interpolation });
+                continue;
+            }
             var cache = field.HasValue ? _financialIndexes : _sampleIndexes;
             var query = QueryNearestX(data, x, y, pane, location, cache, out var built);
             if (built)

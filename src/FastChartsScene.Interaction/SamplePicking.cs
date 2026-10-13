@@ -98,5 +98,5 @@ public sealed partial class ChartInteraction
         return new(best, 0, end - first);
     }
     /// <summary>Release source indexes explicitly on host unload or when no more queries are needed.</summary>
-    public void ClearPickingCache() { _sampleIndexes.Clear(); ClearFinancialPickingCache(); LastSampleQueryVisits = LastSampleQueryTests = 0; }
+    public void ClearPickingCache() { _sampleIndexes.Clear(); _cursorSegmentIndexes.Clear(); ClearFinancialPickingCache(); LastSampleQueryVisits = LastSampleQueryTests = 0; }
 }
