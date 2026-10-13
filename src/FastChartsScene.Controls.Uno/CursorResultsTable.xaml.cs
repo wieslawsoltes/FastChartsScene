@@ -22,7 +22,7 @@ public sealed partial class CursorResultsTable : UserControl
     public string StatusText => Status.Text;
     public event EventHandler? ExportRequested;
     public CursorResultsTable()
-    { Rows = new(_rows); InitializeComponent(); HorizontalContentAlignment = HorizontalAlignment.Stretch; VerticalContentAlignment = VerticalAlignment.Stretch; }
+    { Rows = new(_rows); InitializeComponent(); UpdateResizeAvailability(); HorizontalContentAlignment = HorizontalAlignment.Stretch; VerticalContentAlignment = VerticalAlignment.Stretch; }
     public void SetValues(IReadOnlyList<SeriesCursorValue> values, bool active = true)
     {
         ArgumentNullException.ThrowIfNull(values);
