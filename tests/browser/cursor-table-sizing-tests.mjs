@@ -16,6 +16,7 @@ export async function validateCursorTableSizing(page,h){
   await page.mouse.click(b.x+b.width/2,b.y+b.height/2);
  }
  await scenario('cursor table sizing: native drag resizes the pane without changing chart values or row objects',async()=>{
+  assert.equal(await page.evaluate(()=>globalThis.chartBridge.CheckCursorRowFormattingReuse()),'passed');
   await setup();const values=await sample(),saved=await document(),before=await bounds(),chart=await inspect(),g=await grip();
   await page.mouse.move(g.x+g.width/2,g.y+g.height/2);await page.mouse.down();
   await page.mouse.move(g.x+g.width/2,g.y+g.height/2-72,{steps:8});await page.mouse.up();

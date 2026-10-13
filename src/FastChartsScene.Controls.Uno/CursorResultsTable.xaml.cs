@@ -79,21 +79,35 @@ public sealed class CursorResultRow : INotifyPropertyChanged
     public string DetailText { get; private set; } = "";
     public SolidColorBrush Swatch { get; private set; } = new();
     public event PropertyChangedEventHandler? PropertyChanged;
-    public CursorResultRow(SeriesCursorValue value) { Set(value); }
+    private static readonly PropertyChangedEventArgs AllPropertiesChanged = new(null);
+    private string _exactX = "", _exactY = "";
+    public CursorResultRow(SeriesCursorValue value) { Set(value, true); }
     internal static string Exact(double value) => value.ToString("R", CultureInfo.InvariantCulture);
     internal bool Update(SeriesCursorValue value)
     {
         if (Value == value) return false;
-        Set(value); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null)); return true;
+        Set(value); PropertyChanged?.Invoke(this, AllPropertiesChanged); return true;
     }
-    private void Set(SeriesCursorValue value)
+    private void Set(SeriesCursorValue value, bool initial = false)
     {
+        var previous = Value;
         var color = value.Color;
-        if (Value.Color != color) Swatch = new(Windows.UI.Color.FromArgb((byte)(color.A * 255), (byte)(color.R * 255), (byte)(color.G * 255), (byte)(color.B * 255)));
-        Value = value; IndexText = value.Index.ToString(CultureInfo.InvariantCulture);
-        XText = value.Data.X.ToString("G9", CultureInfo.InvariantCulture); YText = value.Data.Y.ToString("G9", CultureInfo.InvariantCulture);
-        FieldText = value.Field?.ToString() ?? "Y";
-        DetailText = $"{value.Title} [{value.XAxisId}/{value.YAxisId}]  Index {IndexText}  X {Exact(value.Data.X)}  {FieldText} {Exact(value.Data.Y)}";
-        if (value.Candle is { } c) DetailText += $"  Open {Exact(c.Open)}  High {Exact(c.High)}  Low {Exact(c.Low)}  Close {Exact(c.Close)}  Volume {Exact(c.Volume)}";
+        if (initial || previous.Color != color)
+            Swatch = new(Windows.UI.Color.FromArgb((byte)(color.A * 255), (byte)(color.R * 255), (byte)(color.G * 255), (byte)(color.B * 255)));
+        if (initial || previous.Index != value.Index) IndexText = value.Index.ToString(CultureInfo.InvariantCulture);
+        if (initial || previous.Data.X != value.Data.X)
+        { XText = value.Data.X.ToString("G9", CultureInfo.InvariantCulture); _exactX = Exact(value.Data.X); }
+        if (initial || previous.Data.Y != value.Data.Y)
+        { YText = value.Data.Y.ToString("G9", CultureInfo.InvariantCulture); _exactY = Exact(value.Data.Y); }
+        if (initial || previous.Field != value.Field) FieldText = value.Field?.ToString() ?? "Y";
+        // Color-only and identity-only updates do not change the selected-row text.
+        // Retain formatted numbers across unrelated title/color/axis notifications.
+        if (initial || previous.Title != value.Title || previous.XAxisId != value.XAxisId || previous.YAxisId != value.YAxisId ||
+            previous.Index != value.Index || previous.Data != value.Data || previous.Field != value.Field || previous.Candle != value.Candle)
+        {
+            DetailText = $"{value.Title} [{value.XAxisId}/{value.YAxisId}]  Index {IndexText}  X {_exactX}  {FieldText} {_exactY}";
+            if (value.Candle is { } c) DetailText += $"  Open {Exact(c.Open)}  High {Exact(c.High)}  Low {Exact(c.Low)}  Close {Exact(c.Close)}  Volume {Exact(c.Volume)}";
+        }
+        Value = value;
     }
 }

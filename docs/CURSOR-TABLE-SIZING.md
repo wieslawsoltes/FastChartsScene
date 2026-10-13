@@ -60,3 +60,13 @@ requires its ordinary frame compilation; this is not zero-copy resizing or a GPU
 claim. Full property/API/pixel parity, floating legends, arbitrary segment dividers, native
 runtime/hardware and wider browser/input acceptance remain open. Previously excluded
 renderer/contour/fill-opacity/measured-margin work is unchanged.
+
+## Row update review
+
+Rows now retain each formatted numeric cell when unrelated title, color or axis metadata
+changes. Color-only changes also retain full-precision detail text, and changed-row
+notifications share immutable event arguments. Changed prices still refresh their own
+G9 cells and round-trip detail values; unchanged rows publish no notification. Native
+control probes verify string and row identities, swatch changes, exact details and event
+counts under each renderer/device-scale pair. This avoids redundant formatting; it does
+not claim every changed-row update is allocation-free.
