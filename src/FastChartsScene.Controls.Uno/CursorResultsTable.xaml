@@ -18,14 +18,19 @@
   </DataTemplate>
  </UserControl.Resources>
  <Grid Background="#F4F4F4" BorderBrush="#AFAFAF" BorderThickness="0,1,0,0">
-  <Grid.RowDefinitions><RowDefinition Height="32"/><RowDefinition Height="*"/><RowDefinition Height="42"/></Grid.RowDefinitions>
-  <Grid Padding="7,2" ColumnSpacing="8" Background="#E5E5E5">
+  <Grid.RowDefinitions><RowDefinition x:Name="ResizeRow" Height="0"/><RowDefinition Height="32"/><RowDefinition Height="*"/><RowDefinition Height="42"/></Grid.RowDefinitions>
+  <Thumb x:Name="ResizeGrip" Height="6" Visibility="Collapsed" Background="#C4C4C4" IsTabStop="True" UseSystemFocusVisuals="True"
+   AutomationProperties.Name="Resize cursor table" AutomationProperties.HelpText="Drag to resize. Up or Down adjusts 12 pixels; Page Up or Page Down adjusts 48. Home or double-click resets."
+   DragDelta="ResizeDragged" DragStarted="ResizeStarted" KeyDown="ResizeKeyDown" DoubleTapped="ResizeDoubleTapped">
+   <Thumb.Template><ControlTemplate TargetType="Thumb"><Grid Background="{TemplateBinding Background}"><Border Height="1" Width="40" Background="#777777" VerticalAlignment="Center" HorizontalAlignment="Center"/></Grid></ControlTemplate></Thumb.Template>
+  </Thumb>
+  <Grid Grid.Row="1" Padding="7,2" ColumnSpacing="8" Background="#E5E5E5">
    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
    <TextBlock x:Name="Status" Text="Cursor values · move over a chart" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
    <ToggleButton x:Name="Hold" Grid.Column="1" Content="Hold" AutomationProperties.Name="Hold cursor values" MinHeight="24" Padding="8,1" FontSize="11" Checked="HoldChanged" Unchecked="HoldChanged"/>
    <Button Grid.Column="2" Content="CSV" AutomationProperties.Name="Export cursor values" MinHeight="24" Padding="8,1" FontSize="11" Click="ExportClicked"/>
   </Grid>
-  <ScrollViewer Grid.Row="1" HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Auto" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
+  <ScrollViewer Grid.Row="2" HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Auto" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
    <Grid MinWidth="660">
     <Grid.RowDefinitions><RowDefinition Height="23"/><RowDefinition Height="*"/></Grid.RowDefinitions>
     <Grid Padding="6,0" ColumnSpacing="8" Background="#EEEEEE">
@@ -42,6 +47,6 @@
     </ListView>
    </Grid>
   </ScrollViewer>
-  <TextBox x:Name="Details" Grid.Row="2" FontSize="10" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0,1,0,0" Padding="6,3" AutomationProperties.Name="Original cursor value details"/>
+  <TextBox x:Name="Details" Grid.Row="3" FontSize="10" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0,1,0,0" Padding="6,3" AutomationProperties.Name="Original cursor value details"/>
  </Grid>
 </UserControl>
