@@ -36,8 +36,8 @@
      <TextBlock Grid.Column="3" Text="Original value" FontSize="11" TextAlignment="Right"/>
      <TextBlock Grid.Column="4" Text="Field" FontSize="11"/>
     </Grid>
-    <ListView x:Name="Results" Grid.Row="1" ItemsSource="{x:Bind Rows}" ItemTemplate="{StaticResource ResultTemplate}" SelectionMode="Single" SelectionChanged="SelectionChanged" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Same-pane cursor results">
-     <ListView.ItemContainerStyle><Style TargetType="ListViewItem"><Setter Property="MinHeight" Value="28"/><Setter Property="Padding" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/></Style></ListView.ItemContainerStyle>
+    <ListView x:Name="Results" Grid.Row="1" ItemsSource="{x:Bind Rows}" ItemTemplate="{StaticResource ResultTemplate}" SelectionMode="Single" SelectionChanged="SelectionChanged" ScrollViewer.VerticalScrollBarVisibility="Visible" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Same-pane cursor results">
+     <ListView.ItemContainerStyle><Style TargetType="ListViewItem"><Setter Property="MinHeight" Value="28"/><Setter Property="Height" Value="28"/><Setter Property="Padding" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/></Style></ListView.ItemContainerStyle>
      <ListView.ItemsPanel><ItemsPanelTemplate><ItemsStackPanel Orientation="Vertical"/></ItemsPanelTemplate></ListView.ItemsPanel>
     </ListView>
    </Grid>

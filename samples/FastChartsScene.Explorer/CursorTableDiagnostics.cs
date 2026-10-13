@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using FastChartsScene.Controls.Uno;
 using FastChartsScene.Interaction;
+using FastChartsScene.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -14,8 +15,10 @@ namespace FastChartsScene.Explorer;
 public sealed record CursorTableSnapshot(bool Enabled, bool Active, bool Held, string Status,
     long Created, long Updated, long Queries, long Published, int Realized,
     SeriesCursorValue[] Values, string[] PaintedTexts);
+public sealed record CursorTableScrollSnapshot(double Offset, double Extent, double Viewport, double Maximum, RectD Bounds);
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(CursorTableSnapshot))]
+[JsonSerializable(typeof(CursorTableScrollSnapshot))]
 internal partial class CursorTableJsonContext : JsonSerializerContext { }
 
 public static partial class BrowserBridge
@@ -46,6 +49,18 @@ public static partial class BrowserBridge
         var table = Page!.CursorTable;
         var target = name == "$table" ? table : CursorTableChildren(table).OfType<FrameworkElement>().First(e => AutomationProperties.GetName(e) == name);
         return Bounds(target);
+    }
+#if __WASM__
+    [JSExport]
+#endif
+    public static string CursorTableScroll()
+    {
+        var list = CursorTableChildren(Page!.CursorTable).OfType<ListView>().Single();
+        var scroll = CursorTableChildren(list).OfType<ScrollViewer>().First();
+        var origin = scroll.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(0, 0));
+        return JsonSerializer.Serialize(new CursorTableScrollSnapshot(scroll.VerticalOffset, scroll.ExtentHeight,
+            scroll.ViewportHeight, scroll.ScrollableHeight, new RectD(origin.X, origin.Y, scroll.ActualWidth, scroll.ActualHeight)),
+            CursorTableJsonContext.Default.CursorTableScrollSnapshot);
     }
 #if __WASM__
     [JSExport]

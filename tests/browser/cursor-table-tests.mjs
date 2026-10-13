@@ -48,10 +48,28 @@ export async function validateCursorTable(page,h){
   assert(s.realized>0&&s.realized<40,'List must virtualize its native containers');
   const b=await stable(()=>page.evaluate(()=>JSON.parse(globalThis.chartBridge.CursorTableBounds('Same-pane cursor results'))),'results list');
   await page.mouse.move(b.x+b.width/2,b.y+b.height/2);
-  for(let i=0;i<4;i++){await page.mouse.wheel(0,1300);await frames();}
+  // Uno interprets native wheel deltas in scroll units, not requested browser pixels.
+  // Four large wheel events did not traverse 128 rows. Drive the actual scrolling
+  // surface until its final row is realized and inside the viewport; do not assign
+  // a ScrollViewer offset or synthesize list selection to satisfy the test.
+  let scroll, row; const deadline=Date.now()+20000;
+  while(Date.now()<deadline){
+   ({scroll,row}=await page.evaluate(()=>{
+    const text=globalThis.chartBridge.CursorTableRowBounds(127);
+    return {scroll:JSON.parse(globalThis.chartBridge.CursorTableScroll()),row:text?JSON.parse(text):null};
+   }));
+   assert(scroll.maximum>0,'A 128-row list must have a vertical scroll extent');
+   if(row&&row.y>=scroll.bounds.y-1&&row.y+row.height<=scroll.bounds.y+scroll.bounds.height+1)break;
+   await page.mouse.wheel(0,1300);
+   await page.waitForTimeout(80);await frames();
+  }
+  assert(row&&row.y>=scroll.bounds.y-1&&row.y+row.height<=scroll.bounds.y+scroll.bounds.height+1,
+   'Last result never reached its scrolling viewport: '+JSON.stringify({scroll,row}));
   const last=await stable(()=>page.evaluate(()=>{const b=globalThis.chartBridge.CursorTableRowBounds(127);return b?JSON.parse(b):null;}),'last result');
+  assert(last.height<=29,'Native result rows must retain the compact 28-DIP height');
   await page.mouse.click(last.x+100,last.y+last.height/2);await page.waitForFunction(()=>globalThis.chartBridge.CursorTableDetails().includes('Channel 127'));
-  assert((await state()).realized<40);return {rows:128,realized:(await state()).realized};
+  assert((await state()).realized<40);assert.equal((await state()).updated,s.updated);
+  return {rows:128,realized:(await state()).realized,rowHeight:last.height,scrollOffset:scroll.offset,scrollExtent:scroll.extent};
  });
  await scenario('cursor table: compact viewport retains usable chart and horizontally scrollable native results',async()=>{
   await setup();await page.setViewportSize({width:480,height:800});await sample();
