@@ -8,6 +8,7 @@ internal static class FinancialQueryBenchmarks
 {
     internal static void Run(Action<string, Func<double>> measure, List<object> measurements)
     {
+        SeriesCursorBenchmarks.Run(measure, measurements);
         FinancialXBenchmarks.Run(measure, measurements);
         using var document = new ChartDocument { ShowLegend = false };
         document.XAxis.Range = new(0, 10); document.YAxis.Range = new(0, 20);

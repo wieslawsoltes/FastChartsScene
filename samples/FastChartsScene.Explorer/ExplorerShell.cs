@@ -88,6 +88,7 @@ public sealed partial class ExplorerPage
         toolbar.Children.Add(Button("Inspector", () => { if (ActualWidth >= 1100) { _inspectorVisible = !_inspectorVisible; Responsive(); } }));
         toolbar.Children.Add(Button("Details", () => { _detailsVisible = !_detailsVisible; Responsive(); }));
         toolbar.Children.Add(Button("Extract project", () => Export("project")));
+        toolbar.Children.Add(Button("Cursor table", ToggleCursorTable));
         foreach (var button in toolbar.Children.OfType<Button>())
         { button.MinHeight = 27; button.Padding = new Thickness(8, 3, 8, 3); button.FontSize = 11; button.CornerRadius = new CornerRadius(1); button.Foreground = Brush("F2CC00"); ToolTipService.SetToolTip(button, button.Content); }
         _toolbarScroll = new ScrollViewer { Content = toolbar, Background = Brush("454545"), HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollMode = ScrollMode.Disabled };
@@ -98,7 +99,7 @@ public sealed partial class ExplorerPage
         _center.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) }); _center.RowDefinitions.Add(new() { Height = new GridLength(0) }); _center.Children.Add(Chart);
         var tabs = new Pivot { Background = Brush("303030"), Margin = new Thickness(1) };
         tabs.Items.Add(new PivotItem { Header = "Overview", Content = new ScrollViewer { Content = _description } }); tabs.Items.Add(new PivotItem { Header = "Data", Content = _data }); tabs.Items.Add(new PivotItem { Header = "C# usage", Content = _usage });
-        Grid.SetRow(tabs, 1); _center.Children.Add(tabs); Grid.SetColumn(_center, 1); _workspace.Children.Add(_center);
+        Grid.SetRow(tabs, 1); _center.Children.Add(tabs); Grid.SetColumn(_center, 1); _workspace.Children.Add(_center); InitializeCursorTable();
         _inspectorScroll = new ScrollViewer { Content = _inspector, Background = Brush("F2F2F2"), RequestedTheme = ElementTheme.Light, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Disabled };
         InitializePropertyPresentation(); Grid.SetColumn(_inspectorPane, 2); _workspace.Children.Add(_inspectorPane); Grid.SetRow(_workspace, 3); _root.Children.Add(_workspace);
         _status.Margin = new Thickness(10, 3, 10, 2); _status.Foreground = Brush("C6B343"); Grid.SetRow(_status, 4); _root.Children.Add(_status);

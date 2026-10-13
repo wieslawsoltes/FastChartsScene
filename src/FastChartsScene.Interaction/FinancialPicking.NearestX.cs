@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using FastChartsScene.Core;
 using FastChartsScene.Data;
 
@@ -7,9 +8,17 @@ public sealed partial class ChartInteraction
 {
     private PointQueryResult QueryFinancialX(IDataSource data, Axis x, Axis y, RectD pane, PointD location)
     {
+        var result = QueryNearestX(data, x, y, pane, location, _financialIndexes, out var built);
+        if (built) FinancialIndexBuildCount++;
+        return result;
+    }
+    private static PointQueryResult QueryNearestX(IDataSource data, Axis x, Axis y, RectD pane, PointD location,
+        ConditionalWeakTable<IDataSource, PointSpatialIndex> indexes, out bool built)
+    {
+        built = false;
         // Reuse an already-built exact source index across modes, field view revisits,
         // panning and resizing. A new immutable source gets a new weak cache entry.
-        if (_financialIndexes.TryGetValue(data, out var retained)) return retained.NearestX(x, y, pane, location);
+        if (indexes.TryGetValue(data, out var retained)) return retained.NearestX(x, y, pane, location);
         var scanned = 0;
         if (data.IsOrdered)
         {
@@ -52,7 +61,7 @@ public sealed partial class ChartInteraction
             }
             if (left < first && right >= end) return new(best, 0, scanned);
         }
-        var indexTree = new PointSpatialIndex(data); _financialIndexes.Add(data, indexTree); FinancialIndexBuildCount++;
+        var indexTree = new PointSpatialIndex(data); indexes.Add(data, indexTree); built = true;
         var query = indexTree.NearestX(x, y, pane, location);
         return query with { TestedSamples = scanned + query.TestedSamples };
     }

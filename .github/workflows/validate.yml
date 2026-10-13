@@ -10,7 +10,8 @@ defaults:
   run:
     shell: bash
 concurrency:
-  group: validate-${{ github.ref }}
+  # A new stable group releases candidates held by the former non-cancellable gate.
+  group: validate-cancellable-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   core:
@@ -187,33 +188,34 @@ jobs:
 
   evidence:
     name: Verify complete validation evidence
-    if: always()
+    # Run after failures, but do not retain an obsolete run after cancellation.
+    if: ${{ !cancelled() }}
     needs: [core, uno, browser]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Collect all independent suite evidence
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/download-artifact@v4
         with:
           pattern: browser-evidence-*
           path: artifacts/evidence
           merge-multiple: false
       - name: Include build and package verification logs
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/download-artifact@v4
         with:
           name: build-evidence
           path: artifacts/evidence/build-evidence
       - name: Include portable test and benchmark evidence
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/download-artifact@v4
         with:
           name: core-results
           path: artifacts/evidence/core-results
       - name: Require all jobs and exact-build suite receipts to pass
-        if: always()
+        if: ${{ !cancelled() }}
         env:
           MANIFEST_HASH: ${{ needs.uno.outputs.manifest }}
           BUILD_ARTIFACT: ${{ needs.uno.outputs.artifact_id }}
@@ -223,7 +225,7 @@ jobs:
           --commit "$(git rev-parse HEAD)" --tree "$(git rev-parse HEAD^{tree})"
           --manifest-hash "$MANIFEST_HASH" --artifact-id "$BUILD_ARTIFACT"
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           name: validation-evidence
           path: artifacts/evidence
