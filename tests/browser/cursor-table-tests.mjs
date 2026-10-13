@@ -12,6 +12,17 @@ export async function validateCursorTable(page,h){
   const b=await stable(read,name);await page.mouse.click(b.x+b.width/2,b.y+b.height/2);
  }
  async function sample(u=.4,v=.1,count=2){
+  // A toolbar click changes the table flag before the queued Grid arrangement.
+  // Require both panes and their compiled frame to agree for a stable interval;
+  // a momentarily current pre-toggle frame is not the final pointer coordinate space.
+  await stable(()=>page.evaluate(()=>{
+   const chart=JSON.parse(globalThis.chartBridge.Inspect());
+   const table=JSON.parse(globalThis.chartBridge.CursorTableBounds('$table'));
+   return JSON.parse(globalThis.chartBridge.InspectCursorTable()).enabled&&
+    table.height>0&&table.y+table.height<=innerHeight+1&&
+    Math.abs(chart.bounds.y+chart.bounds.height-table.y)<1&&
+    globalThis.chartBridge.FinancialFrameIsCurrent(innerWidth,innerHeight)?chart.bounds:null;
+  }),'settled chart and cursor table');
   await currentFrame();const s=await inspect();await page.mouse.move(s.bounds.x+s.plot.x+u*s.plot.width,s.bounds.y+s.plot.y+v*s.plot.height);
   await page.waitForFunction(n=>{const s=JSON.parse(globalThis.chartBridge.InspectCursorTable());return s.active&&s.values.length===n;},count);
   await frames();return state();
