@@ -22,37 +22,61 @@ public sealed partial class CursorResultsTable : UserControl
     public string StatusText => Status.Text;
     public event EventHandler? ExportRequested;
     public CursorResultsTable()
-    { Rows = new(_rows); InitializeComponent(); UpdateResizeAvailability(); HorizontalContentAlignment = HorizontalAlignment.Stretch; VerticalContentAlignment = VerticalAlignment.Stretch; }
+    { Rows = new(_rows); InitializeComponent(); _trackingReady = true; SyncTrackingMode(); UpdateResultHeaders(); UpdateResizeAvailability(); HorizontalContentAlignment = HorizontalAlignment.Stretch; VerticalContentAlignment = VerticalAlignment.Stretch; }
     public void SetValues(IReadOnlyList<SeriesCursorValue> values, bool active = true)
     {
         ArgumentNullException.ThrowIfNull(values);
         if (IsHeld) return;
         if (!active) { Status.Text = _rows.Count == 0 ? "Cursor values · move over a chart" : $"Last sample · {_rows.Count} series"; return; }
+        var calculated = false;
         for (var i = 0; i < values.Count; i++)
         {
+            calculated |= values[i].IsInterpolated;
             if (i >= _rows.Count) { _rows.Add(new(values[i])); CreatedRows++; UpdatedRows++; }
             else if (_rows[i].Update(values[i])) UpdatedRows++;
         }
         while (_rows.Count > values.Count) _rows.RemoveAt(_rows.Count - 1);
-        Status.Text = values.Count == 0 ? "No eligible line or financial values in this pane" : $"Nearest X · {values.Count} series · original values";
+        UpdateResultHeaders(calculated);
+        Status.Text = values.Count == 0 ? "No eligible line or financial values in this pane" : calculated ?
+            $"{values.Count} series · Calc Y marks calculated values" : TrackingMode == SeriesCursorTrackingMode.Interpolated ?
+            $"{values.Count} series · original values (no calculated rows)" : $"Nearest X · {values.Count} series · original values";
         UpdateDetails();
     }
     public void Clear()
-    { Hold.IsChecked = false; _rows.Clear(); Details.Text = ""; Status.Text = "Cursor values · move over a chart"; }
+    { Hold.IsChecked = false; _rows.Clear(); UpdateResultHeaders(); Details.Text = ""; Status.Text = "Cursor values · move over a chart"; }
     public IReadOnlyList<SeriesCursorValue> Snapshot() => _rows.Select(r => r.Value).ToArray();
     public string ExportCsv()
     {
-        var text = new StringBuilder("SeriesId,SeriesTitle,Index,X,Value,Field,XAxis,YAxis,Open,High,Low,Close,Volume\r\n");
-        static string Q(string s) => "\"" + s.Replace("\"", "\"\"") + "\"";
+        var calculated = _rows.Any(r => r.Value.IsInterpolated);
+        var text = new StringBuilder("SeriesId,SeriesTitle,Index,X,Value,Field,XAxis,YAxis,Open,High,Low,Close,Volume");
+        if (calculated) text.Append(",ResultKind,ResultX,ResultValue,EndIndex,EndX,EndValue,Interpolation");
+        text.Append("\r\n");
+        static string Q(string s)
+        {
+            var trimmed = s.AsSpan().TrimStart();
+            if (!trimmed.IsEmpty && (trimmed[0] is '=' or '+' or '-' or '@' || s[0] is '\t' or '\r' or '\n')) s = "'" + s;
+            return "\"" + s.Replace("\"", "\"\"") + "\"";
+        }
         foreach (var row in _rows)
         {
             var v = row.Value; var c = v.Candle;
             text.Append(Q(v.SeriesId)).Append(',').Append(Q(v.Title)).Append(',').Append(v.Index.ToString(CultureInfo.InvariantCulture)).Append(',')
-                .Append(CursorResultRow.Exact(v.Data.X)).Append(',').Append(CursorResultRow.Exact(v.Data.Y)).Append(',').Append(Q(row.FieldText)).Append(',')
+                .Append(CursorResultRow.Exact(v.Data.X)).Append(',').Append(CursorResultRow.Exact(v.Data.Y)).Append(',').Append(Q(v.Field?.ToString() ?? "Y")).Append(',')
                 .Append(Q(v.XAxisId)).Append(',').Append(Q(v.YAxisId)).Append(',')
                 .Append(c is { } a ? CursorResultRow.Exact(a.Open) : "").Append(',').Append(c is { } b ? CursorResultRow.Exact(b.High) : "").Append(',')
                 .Append(c is { } d ? CursorResultRow.Exact(d.Low) : "").Append(',').Append(c is { } e ? CursorResultRow.Exact(e.Close) : "").Append(',')
-                .Append(c is { } f ? CursorResultRow.Exact(f.Volume) : "").Append("\r\n");
+                .Append(c is { } f ? CursorResultRow.Exact(f.Volume) : "");
+            if (calculated)
+            {
+                var result = v.ResultData; var interpolation = v.Interpolation;
+                text.Append(',').Append(v.IsInterpolated ? "Interpolated" : "Original").Append(',')
+                    .Append(CursorResultRow.Exact(result.X)).Append(',').Append(CursorResultRow.Exact(result.Y)).Append(',')
+                    .Append(interpolation?.EndIndex.ToString(CultureInfo.InvariantCulture) ?? "").Append(',')
+                    .Append(interpolation is { } endX ? CursorResultRow.Exact(endX.EndData.X) : "").Append(',')
+                    .Append(interpolation is { } endY ? CursorResultRow.Exact(endY.EndData.Y) : "").Append(',')
+                    .Append(interpolation is { } method ? Q(method.Method.ToString()) : "");
+            }
+            text.Append("\r\n");
         }
         return text.ToString();
     }
@@ -94,18 +118,24 @@ public sealed class CursorResultRow : INotifyPropertyChanged
         var color = value.Color;
         if (initial || previous.Color != color)
             Swatch = new(Windows.UI.Color.FromArgb((byte)(color.A * 255), (byte)(color.R * 255), (byte)(color.G * 255), (byte)(color.B * 255)));
-        if (initial || previous.Index != value.Index) IndexText = value.Index.ToString(CultureInfo.InvariantCulture);
-        if (initial || previous.Data.X != value.Data.X)
-        { XText = value.Data.X.ToString("G9", CultureInfo.InvariantCulture); _exactX = Exact(value.Data.X); }
-        if (initial || previous.Data.Y != value.Data.Y)
-        { YText = value.Data.Y.ToString("G9", CultureInfo.InvariantCulture); _exactY = Exact(value.Data.Y); }
-        if (initial || previous.Field != value.Field) FieldText = value.Field?.ToString() ?? "Y";
+        var result = value.ResultData; var previousResult = previous.ResultData;
+        if (initial || previous.Index != value.Index || previous.Interpolation?.EndIndex != value.Interpolation?.EndIndex)
+            IndexText = value.Index.ToString(CultureInfo.InvariantCulture) + (value.Interpolation is { } end ? "–" + end.EndIndex.ToString(CultureInfo.InvariantCulture) : "");
+        if (initial || previousResult.X != result.X)
+        { XText = result.X.ToString("G9", CultureInfo.InvariantCulture); _exactX = Exact(result.X); }
+        if (initial || previousResult.Y != result.Y)
+        { YText = result.Y.ToString("G9", CultureInfo.InvariantCulture); _exactY = Exact(result.Y); }
+        if (initial || previous.Field != value.Field || previous.IsInterpolated != value.IsInterpolated)
+            FieldText = value.IsInterpolated ? "Calc Y" : value.Field?.ToString() ?? "Y";
         // Color-only and identity-only updates do not change the selected-row text.
         // Retain formatted numbers across unrelated title/color/axis notifications.
         if (initial || previous.Title != value.Title || previous.XAxisId != value.XAxisId || previous.YAxisId != value.YAxisId ||
-            previous.Index != value.Index || previous.Data != value.Data || previous.Field != value.Field || previous.Candle != value.Candle)
+            previous.Index != value.Index || previous.Data != value.Data || previous.Field != value.Field || previous.Candle != value.Candle ||
+            previous.Interpolation != value.Interpolation)
         {
             DetailText = $"{value.Title} [{value.XAxisId}/{value.YAxisId}]  Index {IndexText}  X {_exactX}  {FieldText} {_exactY}";
+            if (value.Interpolation is { } interpolation)
+                DetailText = $"Interpolated {interpolation.Method} · {value.Title} [{value.XAxisId}/{value.YAxisId}]  X {_exactX}  Y {_exactY}  From {value.Index}: ({Exact(value.Data.X)}, {Exact(value.Data.Y)}) to {interpolation.EndIndex}: ({Exact(interpolation.EndData.X)}, {Exact(interpolation.EndData.Y)})";
             if (value.Candle is { } c) DetailText += $"  Open {Exact(c.Open)}  High {Exact(c.High)}  Low {Exact(c.Low)}  Close {Exact(c.Close)}  Volume {Exact(c.Volume)}";
         }
         Value = value;

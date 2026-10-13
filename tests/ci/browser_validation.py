@@ -18,8 +18,8 @@ from typing import Any
 
 MANIFEST = "validation-manifest.json"
 SUITES = {
-    "webgl": ("browser-tests.mjs", "browser-results", "browser-tests.txt", 177, "pageErrors"),
-    "skia": ("fallback-tests.mjs", "fallback-results", "fallback-tests.txt", 172, "pageErrors"),
+    "webgl": ("browser-tests.mjs", "browser-results", "browser-tests.txt", 189, "pageErrors"),
+    "skia": ("fallback-tests.mjs", "fallback-results", "fallback-tests.txt", 184, "pageErrors"),
     "axis": ("axis-tick-tests.mjs", "axis-ticks-results", "axis-ticks-tests.txt", 48, "errors"),
 }
 

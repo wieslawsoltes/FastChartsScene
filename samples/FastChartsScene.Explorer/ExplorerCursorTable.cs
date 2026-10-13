@@ -6,7 +6,7 @@ namespace FastChartsScene.Explorer;
 
 public sealed partial class ExplorerPage
 {
-    private readonly CursorResultsTable _cursorTable = new() { Visibility = Visibility.Collapsed, ResizeEnabled = true };
+    private readonly CursorResultsTable _cursorTable = new() { Visibility = Visibility.Collapsed, ResizeEnabled = true, TrackingModeSelectionEnabled = true };
     private bool _cursorTableVisible;
     private double _cursorTableHeight = 210;
     private ChartDocument? _cursorTableOwner;
@@ -26,6 +26,7 @@ public sealed partial class ExplorerPage
             _cursorTableHeight = request.Reset ? 210 : Math.Clamp(_center.RowDefinitions[2].Height.Value + request.HeightChange, 0, 520);
             ArrangeCursorTable();
         };
+        _cursorTable.TrackingModeChanged += (_, _) => Chart.CursorValuesTrackingMode = _cursorTable.TrackingMode;
         Chart.SeriesCursorValuesChanged += (_, _) =>
         {
             if (!ReferenceEquals(_cursorTableOwner, Chart.CursorValuesDocument))

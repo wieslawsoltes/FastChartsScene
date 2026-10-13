@@ -35,7 +35,9 @@ internal static partial class Program
             var interpolation = v.Interpolation!.Value; Equal(1, interpolation.EndIndex); True(interpolation.EndData == new PointD(8, 16));
             True(interpolation.Method == LineInterpolation.Linear && v.Candle == null);
             var f = new SceneCompiler().Compile(d, 800, 600); List<SeriesCursorValue> original = [];
-            new ChartInteraction(d).QuerySeriesCursorValues(f, f.Layout.ToScreen(d.XAxis, d.YAxis, new(5, 19)), original);
+            // Deliberately avoid a midpoint: floating-point screen projections need
+            // not make mathematically equidistant source X values an exact pixel tie.
+            new ChartInteraction(d).QuerySeriesCursorValues(f, f.Layout.ToScreen(d.XAxis, d.YAxis, new(5.1, 19)), original);
             True(!original[0].IsInterpolated && original[0].ResultData == original[0].Data); Equal(1, original[0].Index);
         });
         Add("interpolated exact knots remain original samples including the final boundary", () => {
