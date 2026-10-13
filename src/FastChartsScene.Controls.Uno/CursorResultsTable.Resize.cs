@@ -34,7 +34,9 @@ public sealed partial class CursorResultsTable
         if (ResizeEnabled && double.IsFinite(e.VerticalChange) && e.VerticalChange != 0)
             ResizeRequested?.Invoke(this, new(-e.VerticalChange));
     }
-    private void ResizePressed(object sender, PointerRoutedEventArgs e) => ResizeGrip.Focus(FocusState.Pointer);
+    // Thumb handles PointerPressed itself before ordinary routed handlers. Its
+    // native DragStarted event is raised even for a click without movement.
+    private void ResizeStarted(object sender, DragStartedEventArgs e) => ResizeGrip.Focus(FocusState.Pointer);
     private void ResizeDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
         if (!ResizeEnabled) return;

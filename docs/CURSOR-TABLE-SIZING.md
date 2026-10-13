@@ -26,7 +26,10 @@ Dragging up requests growth and dragging down requests shrinkage. The grip is ke
 focusable: Up/Down adjust twelve DIP, Page Up/Down adjust forty-eight DIP, and Home resets.
 Double-click also requests reset. Keyboard events are handled by the grip, not propagated
 to a chart's Home-to-fit shortcut. Hosts can leave resizing disabled; the grip then has no
-layout footprint. Resizing does not change sampled values, Hold or CSV contents.
+layout footprint. Resizing does not change sampled values, Hold or CSV contents. Pointer focus is
+established through Thumb's native DragStarted event, since Thumb handles PointerPressed
+before ordinary routed event handlers. The explorer accumulates deltas against its
+assigned row size, not delayed ActualHeight, so rapid input does not lose adjustments.
 
 ## Explorer layout and limits
 

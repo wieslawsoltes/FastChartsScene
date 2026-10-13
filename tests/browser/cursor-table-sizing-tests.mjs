@@ -31,12 +31,15 @@ export async function validateCursorTableSizing(page,h){
   await page.keyboard.press('PageUp');await height(258);await page.keyboard.press('PageDown');await height(210);
   // The reset key belongs to the divider, not the chart's Home-to-fit shortcut.
   const saved=await document();await page.keyboard.press('Home');await height(210);assert.equal(await document(),saved);
+  await page.keyboard.press('PageUp');await height(258);const g=await grip();
+  await page.mouse.dblclick(g.x+g.width/2,g.y+g.height/2);await height(210);assert.equal(await document(),saved);
  });
  await scenario('cursor table sizing: bounded preferred height survives short windows and Details toggles',async()=>{
   await setup();await sample();const saved=await document();await action('Resize cursor table');
   for(let i=0;i<12;i++)await page.keyboard.press('PageUp');await height(520);assert((await inspect()).bounds.height>=240);
-  await toolbar('Details');await currentFrame();
-  await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.Inspect()).bounds.height>=239);
+  await toolbar('Details');
+  await page.waitForFunction(()=>JSON.parse(globalThis.chartBridge.CursorTableBounds('$table')).height<520&&JSON.parse(globalThis.chartBridge.Inspect()).bounds.height>=239);
+  await currentFrame();
   assert((await bounds()).height<520);assert((await inspect()).bounds.height>=239);
   await toolbar('Details');await height(520);
   await page.setViewportSize({width:480,height:500});await currentFrame();

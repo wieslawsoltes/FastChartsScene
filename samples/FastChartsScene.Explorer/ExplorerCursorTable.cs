@@ -21,7 +21,9 @@ public sealed partial class ExplorerPage
         _cursorTable.ResizeRequested += (_, request) =>
         {
             if (!_cursorTableVisible) return;
-            _cursorTableHeight = request.Reset ? 210 : Math.Clamp(_cursorTable.ActualHeight + request.HeightChange, 0, 520);
+            // Accumulate against the assigned row size, not the asynchronously
+            // arranged ActualHeight, so fast drag/key events cannot lose deltas.
+            _cursorTableHeight = request.Reset ? 210 : Math.Clamp(_center.RowDefinitions[2].Height.Value + request.HeightChange, 0, 520);
             ArrangeCursorTable();
         };
         Chart.SeriesCursorValuesChanged += (_, _) =>

@@ -21,7 +21,7 @@
   <Grid.RowDefinitions><RowDefinition x:Name="ResizeRow" Height="0"/><RowDefinition Height="32"/><RowDefinition Height="*"/><RowDefinition Height="42"/></Grid.RowDefinitions>
   <Thumb x:Name="ResizeGrip" Height="6" Visibility="Collapsed" Background="#C4C4C4" IsTabStop="True" UseSystemFocusVisuals="True"
    AutomationProperties.Name="Resize cursor table" AutomationProperties.HelpText="Drag to resize. Up or Down adjusts 12 pixels; Page Up or Page Down adjusts 48. Home or double-click resets."
-   DragDelta="ResizeDragged" PointerPressed="ResizePressed" KeyDown="ResizeKeyDown" DoubleTapped="ResizeDoubleTapped">
+   DragDelta="ResizeDragged" DragStarted="ResizeStarted" KeyDown="ResizeKeyDown" DoubleTapped="ResizeDoubleTapped">
    <Thumb.Template><ControlTemplate TargetType="Thumb"><Grid Background="{TemplateBinding Background}"><Border Height="1" Width="40" Background="#777777" VerticalAlignment="Center" HorizontalAlignment="Center"/></Grid></ControlTemplate></Thumb.Template>
   </Thumb>
   <Grid Grid.Row="1" Padding="7,2" ColumnSpacing="8" Background="#E5E5E5">
