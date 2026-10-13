@@ -38,6 +38,13 @@ Hold, full-precision details and CSV export, and reuses row objects and source i
 The query and control are independently reusable. See [the cursor table guide](docs/SERIES-CURSOR-TABLE.md)
 for family coverage, snapshot/lifecycle contracts, formatting and validation boundaries.
 
+The compact native selector also offers **Interpolated** tracking for original linear
+and stepped segments. Calculated rows are labelled **Calc Y**, retain both original
+endpoint indices, and export calculated values separately from source coordinates.
+Financial, scatter-only and cubic results remain explicitly original. See the
+[interpolated cursor guide](docs/INTERPOLATED-CURSOR-VALUES.md) for numerical, API,
+CSV and performance contracts.
+
 ## Axis ticks and labels
 
 XY axes support exact custom tick positions and text, invariant numeric/date formats,

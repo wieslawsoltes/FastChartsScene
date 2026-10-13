@@ -79,6 +79,7 @@ CatalogBenchmarks.Run(Measure, measurements);
 AxisTickBenchmarks.Run(Measure, measurements);
 AxisTickTextBenchmarks.Run(Measure, measurements);
 FinancialQueryBenchmarks.Run(Measure, measurements);
+InterpolatedCursorBenchmarks.Run(Measure, measurements);
 var output=Path.GetFullPath(args.Length>0?args[0]:"artifacts/performance.json"); Directory.CreateDirectory(Path.GetDirectoryName(output)!);
 File.WriteAllText(output,JsonSerializer.Serialize(new { runtime=Environment.Version.ToString(),os=Environment.OSVersion.ToString(),
     note="CPU microbenchmarks on one CI runner; no hardware GPU, full-frame, latency or reference-product performance claim.",

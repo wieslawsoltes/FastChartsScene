@@ -1,5 +1,8 @@
 # Same-pane original-value cursor table
 
+This guide describes the default **Nearest X** mode. Supported linear/step calculated
+tracking is an additive opt-in; see [interpolated cursor values](INTERPOLATED-CURSOR-VALUES.md).
+
 The **Cursor table** toolbar command opens a native docked table under the chart. It
 shows one nearest-X original value for each eligible line/scatter or financial series
 in the hovered pane, rather than discarding every series except the single closest one.
@@ -95,7 +98,7 @@ mobile layout, row/text/upload retention, document replacement and a real host c
 that disables an overlay while financial cursor notifications are being delivered.
 No prior browser suite is removed. Runtime success must be established for each revision.
 
-Full API/property/pixel parity, all-family tables, interpolated or persistent cursors,
+Full API/property/pixel parity, all-family tables, cubic interpolation or persistent cursors,
 long-label layout and native/hardware/cross-browser qualification remain open. Previously
 excluded renderer/contour/fill-opacity/measured-margin work is not included. GPU
 composition still includes framebuffer readback and CI uses software graphics.
@@ -112,3 +115,10 @@ receipt, package check or successful-main-only Pages condition is removed. Stati
 guardrails supplement, rather than replace, the runtime result verifier. See GitHub's
 [status-check guidance](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#always)
 and [cancellation reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-cancellation).
+
+## Optional interpolated mode
+
+The default contracts above remain original nearest-X. An additive query overload and
+native selector opt into supported linear/step crossings without changing Index/Data to
+manufactured samples. Result/provenance columns, original-only family fallbacks and CSV
+compatibility are specified in [INTERPOLATED-CURSOR-VALUES.md](INTERPOLATED-CURSOR-VALUES.md).
