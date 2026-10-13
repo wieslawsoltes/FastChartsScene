@@ -99,3 +99,16 @@ Full API/property/pixel parity, all-family tables, interpolated or persistent cu
 long-label layout and native/hardware/cross-browser qualification remain open. Previously
 excluded renderer/contour/fill-opacity/measured-margin work is not included. GPU
 composition still includes framebuffer readback and CI uses software graphics.
+
+## Cancellation-aware validation
+
+During this increment the superseded UI run had cancelled build jobs but its `always()`
+evidence job remained queued, while the final candidate was pending in the same concurrency
+group. The aggregate job and its steps now use `!cancelled()`: ordinary failures still
+collect evidence and fail the exact-build gate, but obsolete cancelled runs do not retain
+that job. A one-time stable concurrency-group migration releases candidates from the old
+policy; subsequent runs remain branch-scoped with cancel-in-progress enabled. No test,
+receipt, package check or successful-main-only Pages condition is removed. Static workflow
+guardrails supplement, rather than replace, the runtime result verifier. See GitHub's
+[status-check guidance](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#always)
+and [cancellation reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-cancellation).
