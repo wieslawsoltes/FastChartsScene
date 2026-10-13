@@ -9,6 +9,19 @@ export async function validateInterpolatedCursors(page,h){
  const mode=()=>page.evaluate(()=>globalThis.chartBridge.CursorTrackingMode());
  const saved=()=>page.evaluate(()=>globalThis.chartBridge.ExportDocument());
  const near=(actual,expected)=>assert(Math.abs(actual-expected)<1e-9,`${actual} != ${expected}`);
+ // The pinned Uno input transform converts non-identity coordinates to Vector2
+ // floats: https://github.com/unoplatform/uno/blob/6.7.135/src/Uno.UWP/Extensions/Matrix3x2Extensions.cs
+ // Keep numerical assertions strict against the *delivered* native point. Bound
+ // its distance from the authored input separately to half a CSS pixel.
+ async function assertCrossing(value,fraction,yFromX,{log=false,inverted=false}={}){
+  const nativeX=await page.evaluate(()=>globalThis.chartBridge.CursorTrackingInputX());
+  const chart=await inspect();assert(Number.isFinite(nativeX),'No native pointer event was observed');
+  const u=(nativeX-chart.plot.x)/chart.plot.width;
+  assert(Math.abs(u-fraction)*chart.plot.width<=.5,'Native input did not reach the authored plot position');
+  const unit=inverted?1-u:u;
+  const expectedX=log?Math.pow(100,unit):10*unit;
+  near(value.resultData.x,expectedX);near(value.resultData.y,yFromX(expectedX));
+ }
  async function choose(value,keyboard=false){
   if(await mode()===`${value}/${value}`)return;
   await action('Cursor tracking mode');
@@ -33,16 +46,24 @@ export async function validateInterpolatedCursors(page,h){
   assert(!quoted&&row.length===0&&cell==='','CSV must end in a complete record');
   return rows.slice(1).map(row=>{assert.equal(row.length,rows[0].length);return Object.fromEntries(rows[0].map((key,i)=>[key,row[i]]));});
  }
+ await page.evaluate(()=>globalThis.chartBridge.ObserveCursorTrackingInput(true));
+ try{
  await scenario('interpolated cursor: native selector paints calculated values and preserves original endpoints',async()=>{
   await setup();assert.equal(await mode(),'NearestX/NearestX');await sample(.62,.1);const document=await saved();
   await choose('Interpolated');const s=await sample(.6,.1),value=s.values[1];
-  assert(value.isInterpolated);near(value.resultData.x,6);near(value.resultData.y,6);
+  assert(value.isInterpolated);await assertCrossing(value,.6,x=>5+(x-4)/2);
   // PointD's diagnostic JSON includes its public computed IsFinite property.
   // Retain that contract rather than changing production serialization for the test.
   assert.deepEqual(value.data,{x:4,y:5,isFinite:true});assert.deepEqual(value.interpolation.endData,{x:8,y:7,isFinite:true});assert.equal(value.index,0);assert.equal(value.interpolation.endIndex,1);
   assert.equal(value.resultData.isFinite,true);assert.deepEqual(value.interpolation.result,value.resultData);
   assert(!s.values[0].isInterpolated);assert.equal(await saved(),document);
-  await page.waitForFunction(()=>{const s=JSON.parse(globalThis.chartBridge.InspectCursorTable());return s.paintedTexts.includes('Calc Y')&&s.paintedTexts.includes('0–1')&&s.paintedTexts.includes('Result value')&&s.paintedTexts.includes('6');});
+  await page.waitForFunction(result=>{
+   const s=JSON.parse(globalThis.chartBridge.InspectCursorTable());
+   // Native cells intentionally display G9, while the owned result stays binary64.
+   const numbers=s.paintedTexts.filter(t=>t.trim()!==''&&Number.isFinite(Number(t))).map(Number);
+   const painted=value=>numbers.some(n=>Math.abs(n-value)<=Math.max(1,Math.abs(value))*1e-8);
+   return s.paintedTexts.includes('Calc Y')&&s.paintedTexts.includes('0–1')&&s.paintedTexts.includes('Result value')&&painted(result.x)&&painted(result.y);
+  },value.resultData);
   await page.screenshot({path:resolve(output,'cursor-table-interpolated.png'),scale:'css'});
   return {source:value.data,result:value.resultData,end:value.interpolation.endData};
  });
@@ -55,7 +76,7 @@ export async function validateInterpolatedCursors(page,h){
   assert.equal(line.ResultKind,'Interpolated');assert.equal(line.Index,'0');assert.equal(line.X,'4');assert.equal(line.Value,'5');assert.equal(line.EndIndex,'1');assert.equal(line.EndX,'8');assert.equal(line.EndValue,'7');assert.equal(line.Interpolation,'Linear');
   assert.equal(Number(line.ResultX),before.values[1].resultData.x);assert.equal(Number(line.ResultValue),before.values[1].resultData.y);
   assert.equal(financial.ResultKind,'Original');assert.equal(financial.Volume,'12345');assert.equal(financial.EndIndex,'');
-  await action('Hold cursor values');const live=await sample(.75,.1);near(live.values[1].resultData.x,7.5);near(live.values[1].resultData.y,6.75);
+  await action('Hold cursor values');const live=await sample(.75,.1);await assertCrossing(live.values[1],.75,x=>5+(x-4)/2);
  });
  await scenario('interpolated cursor: vertical motion retains rows formatted values and geometry uploads',async()=>{
   await setup();await choose('Interpolated');const before=await sample(.62,.1);const chart=await inspect(),uploads=await page.evaluate(()=>globalThis.FastChartsSceneWebGL.inspect().map(s=>s.uploads));
@@ -71,7 +92,7 @@ export async function validateInterpolatedCursors(page,h){
   }
   d.series[1].interpolation='Linear';d.series[1].data={kind:'xy',x:[1,100],y:[2,20]};
   d.xAxes[0].minimum=1;d.xAxes[0].maximum=100;d.xAxes[0].scale='Logarithmic';d.xAxes[0].inverted=true;d.yAxes[0].inverted=true;
-  await load(d);const s=await sample(.5,.9);near(s.values[1].resultData.x,10);near(s.values[1].resultData.y,11);assert.deepEqual(s.values[1].data,{x:1,y:2,isFinite:true});
+  await load(d);const s=await sample(.5,.9);await assertCrossing(s.values[1],.5,x=>2+9*Math.log10(x),{log:true,inverted:true});assert.deepEqual(s.values[1].data,{x:1,y:2,isFinite:true});
  });
  await scenario('interpolated cursor: compact native keyboard selector clears Hold without changing the document',async()=>{
   await setup();await choose('Interpolated');await page.setViewportSize({width:480,height:800});await sample(.62,.1);
@@ -91,4 +112,5 @@ export async function validateInterpolatedCursors(page,h){
   }finally{await page.evaluate(()=>globalThis.chartBridge.CancelCursorModeReentry());}
   await action('Cursor table');
  });
+ }finally{await page.evaluate(()=>globalThis.chartBridge.ObserveCursorTrackingInput(false));}
 }

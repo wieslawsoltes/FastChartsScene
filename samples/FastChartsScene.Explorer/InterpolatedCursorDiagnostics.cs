@@ -5,6 +5,7 @@ using FastChartsScene.Data;
 using FastChartsScene.Interaction;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 #if __WASM__
 using System.Runtime.InteropServices.JavaScript;
 #endif
@@ -12,6 +13,29 @@ namespace FastChartsScene.Explorer;
 
 public static partial class BrowserBridge
 {
+    private static ChartControl? _cursorInputOwner;
+    private static double _cursorInputX = double.NaN;
+#if __WASM__
+    [JSExport]
+#endif
+    public static void ObserveCursorTrackingInput(bool enabled)
+    {
+        if (_cursorInputOwner is { } previous) previous.PointerMoved -= ObserveCursorTrackingMoved;
+        _cursorInputOwner = enabled ? Page!.Chart : null;
+        _cursorInputX = double.NaN;
+        if (_cursorInputOwner is { } current) current.PointerMoved += ObserveCursorTrackingMoved;
+    }
+    private static void ObserveCursorTrackingMoved(object sender, PointerRoutedEventArgs e)
+    {
+        // Observe the native delivered coordinate; never synthesize a pointer, set
+        // selection or run a query. Uno's non-identity Matrix3x2 transform uses float
+        // vectors, so idealized browser coordinates are not exact chart coordinates.
+        if (_cursorInputOwner is { } chart) _cursorInputX = e.GetCurrentPoint(chart).Position.X;
+    }
+#if __WASM__
+    [JSExport]
+#endif
+    public static double CursorTrackingInputX() => _cursorInputX;
 #if __WASM__
     [JSExport]
 #endif
