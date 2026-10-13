@@ -52,7 +52,14 @@ public sealed partial class ChartControl
         if (changed) FinancialHitChanged?.Invoke(this, EventArgs.Empty);
     }
     private void ClearCursorHits()
-    { SetDataHit(null); SetScalarHit(null); SetFinancialHit(null); }
+    {
+        var owner = Document; var input = _input;
+        bool SameOwner() => ReferenceEquals(owner, Document) && ReferenceEquals(input, _input);
+        SetDataHit(null); if (!SameOwner()) return;
+        SetScalarHit(null); if (!SameOwner()) return;
+        SetFinancialHit(null); if (!SameOwner()) return;
+        ClearSeriesCursorValues();
+    }
 
     private void UpdateCursorHits(RenderFrame frame, PointD location)
     {
@@ -90,5 +97,7 @@ public sealed partial class ChartControl
         SetScalarHit(scalar);
         if (!StillCurrent()) { ClearObsoleteOwner(); return; }
         SetFinancialHit(financial);
+        if (!StillCurrent()) { ClearObsoleteOwner(); return; }
+        UpdateSeriesCursorValues(frame, location);
     }
 }
