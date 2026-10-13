@@ -37,7 +37,10 @@ export async function validateInterpolatedCursors(page,h){
   await setup();assert.equal(await mode(),'NearestX/NearestX');await sample(.62,.1);const document=await saved();
   await choose('Interpolated');const s=await sample(.6,.1),value=s.values[1];
   assert(value.isInterpolated);near(value.resultData.x,6);near(value.resultData.y,6);
-  assert.deepEqual(value.data,{x:4,y:5});assert.deepEqual(value.interpolation.endData,{x:8,y:7});assert.equal(value.index,0);assert.equal(value.interpolation.endIndex,1);
+  // PointD's diagnostic JSON includes its public computed IsFinite property.
+  // Retain that contract rather than changing production serialization for the test.
+  assert.deepEqual(value.data,{x:4,y:5,isFinite:true});assert.deepEqual(value.interpolation.endData,{x:8,y:7,isFinite:true});assert.equal(value.index,0);assert.equal(value.interpolation.endIndex,1);
+  assert.equal(value.resultData.isFinite,true);assert.deepEqual(value.interpolation.result,value.resultData);
   assert(!s.values[0].isInterpolated);assert.equal(await saved(),document);
   await page.waitForFunction(()=>{const s=JSON.parse(globalThis.chartBridge.InspectCursorTable());return s.paintedTexts.includes('Calc Y')&&s.paintedTexts.includes('0–1')&&s.paintedTexts.includes('Result value')&&s.paintedTexts.includes('6');});
   await page.screenshot({path:resolve(output,'cursor-table-interpolated.png'),scale:'css'});
@@ -68,7 +71,7 @@ export async function validateInterpolatedCursors(page,h){
   }
   d.series[1].interpolation='Linear';d.series[1].data={kind:'xy',x:[1,100],y:[2,20]};
   d.xAxes[0].minimum=1;d.xAxes[0].maximum=100;d.xAxes[0].scale='Logarithmic';d.xAxes[0].inverted=true;d.yAxes[0].inverted=true;
-  await load(d);const s=await sample(.5,.9);near(s.values[1].resultData.x,10);near(s.values[1].resultData.y,11);assert.deepEqual(s.values[1].data,{x:1,y:2});
+  await load(d);const s=await sample(.5,.9);near(s.values[1].resultData.x,10);near(s.values[1].resultData.y,11);assert.deepEqual(s.values[1].data,{x:1,y:2,isFinite:true});
  });
  await scenario('interpolated cursor: compact native keyboard selector clears Hold without changing the document',async()=>{
   await setup();await choose('Interpolated');await page.setViewportSize({width:480,height:800});await sample(.62,.1);
