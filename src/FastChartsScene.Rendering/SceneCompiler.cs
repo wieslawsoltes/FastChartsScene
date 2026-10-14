@@ -10,6 +10,21 @@ namespace FastChartsScene.Rendering;
 public sealed partial class SceneCompiler
 {
     private readonly ConditionalWeakTable<IDataSource, EnvelopeIndex> _indexes = new();
+    private CachedTextMeasurer? _textMeasurements;
+    /// <summary>The host-owned measurer must match its text backend. Null preserves
+    /// legacy fixed-margin layout. Changing it invalidates layout, not source indexes.</summary>
+    public ITextMeasurer? TextMeasurer
+    {
+        get => _textMeasurements?.Inner;
+        set
+        {
+            if (ReferenceEquals(value, TextMeasurer)) return;
+            _textMeasurements = value == null ? null : new(value); _frame = null;
+        }
+    }
+    public long TextMeasurementCount => _textMeasurements?.MeasurementCount ?? 0;
+    public long SourceIndexBuildCount { get; private set; }
+
     private ChartDocument? _document;
     private RenderFrame? _frame;
     public long CompilationCount { get; private set; }
@@ -19,7 +34,14 @@ public sealed partial class SceneCompiler
         ObjectDisposedException.ThrowIf(document.IsDisposed, document);
         if (ReferenceEquals(document, _document) && _frame is { } cached && cached.Metadata.Revision == document.Revision &&
             cached.Metadata.Width == width && cached.Metadata.Height == height) return cached;
+        var revision = document.Revision; var measurements = _textMeasurements;
         var layout = ChartLayout.Create(document, width, height);
+        if (document.View == ChartView.XY && measurements != null)
+        {
+            var text = new MeasuredAxisLayout(document, layout, measurements);
+            layout = ChartLayout.Create(document, width, height, text.Reservation);
+            layout.MeasuredAxes = text;
+        }
         var f = new FrameBuilder(width, height);
         var full = new RectD(0, 0, width, height);
         f.Text(document.Title, width / 2, 28, document.Theme.Text, 20, "center", bold: true);
@@ -31,6 +53,8 @@ public sealed partial class SceneCompiler
             case ChartView.ThreeD: case ChartView.Pie3D: ThreeDScene.Build(document, layout, f); break;
             default: throw new NotSupportedException($"Unknown chart view {document.View}.");
         }
+        if (document.Revision != revision || !ReferenceEquals(measurements, _textMeasurements))
+            throw new InvalidOperationException("Chart or text measurer changed during scene compilation.");
         BuildColorBars(document, layout, f);
         if (document.ShowLegend) BuildLegend(document, layout, f);
         var frame = new RenderFrame(f.Vertices.ToArray(), new(width, height, document.Theme.Background.ToHex(),
@@ -39,7 +63,7 @@ public sealed partial class SceneCompiler
         frame.Validate(); _frame = frame; _document = document; CompilationCount++;
         return frame;
     }
-    public void ClearCache() { _document = null; _frame = null; _indexes.Clear(); _contours.Clear(); }
+    public void ClearCache() { _document = null; _frame = null; _indexes.Clear(); _contours.Clear(); _textMeasurements?.Clear(); }
 
     private void BuildXY(ChartDocument d, ChartLayout l, FrameBuilder f)
     {
@@ -61,7 +85,7 @@ public sealed partial class SceneCompiler
                     {
                         var a=Map(new(band.Data.X(i-1),band.Data.Y(i-1))); var b=Map(new(band.Data.X(i),band.Data.Y(i)));
                         var c=Map(new(band.Upper.X(i),band.Upper.Y(i))); var e=Map(new(band.Upper.X(i-1),band.Upper.Y(i-1)));
-                        FillBand(f,a,b,c,e,band.Color.WithAlpha(.32f),p);
+                        FillBand(f,a,b,c,e,band.Color.WithAlpha(band.Color.A * .32f),p);
                         f.Line(a,b,band.Color,band.StrokeWidth,p); f.Line(e,c,band.Color,band.StrokeWidth,p);
                     }
                     break;
@@ -130,7 +154,7 @@ public sealed partial class SceneCompiler
                 case AnnotationKind.HorizontalLine: f.Line(new(p.X,q.Y),new(p.Right,q.Y),a.Color,1.5,p); break;
                 case AnnotationKind.VerticalLine: f.Line(new(q.X,p.Y),new(q.X,p.Bottom),a.Color,1.5,p); break;
                 case AnnotationKind.Rectangle:
-                    FillPolygon(f,[q,new(r.X,q.Y),r,new(q.X,r.Y)],a.Color.WithAlpha(.15f),p);
+                    FillPolygon(f,[q,new(r.X,q.Y),r,new(q.X,r.Y)],a.Color.WithAlpha(a.Color.A * .15f),p);
                     f.Line(q,new(r.X,q.Y),a.Color,1,p); f.Line(new(r.X,q.Y),r,a.Color,1,p);
                     f.Line(r,new(q.X,r.Y),a.Color,1,p); f.Line(new(q.X,r.Y),q,a.Color,1,p); break;
                 default: throw new NotSupportedException($"Unsupported annotation {a.Kind}.");
@@ -141,8 +165,18 @@ public sealed partial class SceneCompiler
 
     private void DrawLine(FrameBuilder f, LineSeries line, Axis x, RectD clip, Func<PointD,PointD> map)
     {
-        var selected=_indexes.GetValue(line.Data,d=>new EnvelopeIndex(d)).Select(x,(int)Math.Ceiling(clip.Width));
-        IReadOnlyList<PointD> points=selected.Select(i=>new PointD(line.Data.X(i),line.Data.Y(i))).ToArray();
+        // A source getter may replace the model source during cold construction.
+        // Keep the immutable source key and every point read from the same snapshot;
+        // the outer revision guard rejects the obsolete frame without poisoning the
+        // replacement source's retained index.
+        var data = line.Data;
+        if (!_indexes.TryGetValue(data, out var index))
+        {
+            var candidate = new EnvelopeIndex(data); SourceIndexBuildCount++;
+            if (!_indexes.TryGetValue(data, out index)) { index = candidate; _indexes.Add(data, index); }
+        }
+        var selected=index.Select(x,(int)Math.Ceiling(clip.Width));
+        IReadOnlyList<PointD> points=selected.Select(i=>new PointD(data.X(i),data.Y(i))).ToArray();
         if(line.Interpolation==LineInterpolation.MonotoneCubic)
             points=GeometryAlgorithms.Monotone(XyData.FromPoints(points),8);
         PointD? previous=null;
@@ -156,7 +190,7 @@ public sealed partial class SceneCompiler
             {
                 void Segment(PointD from,PointD to)
                 {
-                    if(line.FillToBaseline) FillBand(f,from,to,new(to.X,baseline),new(from.X,baseline),line.Color.WithAlpha(.25f),clip);
+                    if(line.FillToBaseline) FillBand(f,from,to,new(to.X,baseline),new(from.X,baseline),line.Color.WithAlpha(line.Color.A * .25f),clip);
                     if(line.ShowLine) f.Line(from,to,line.Color,line.StrokeWidth,clip);
                 }
                 if(line.Interpolation==LineInterpolation.StepBefore) { var elbow=new PointD(a.X,q.Y); Segment(a,elbow); Segment(elbow,q); }
@@ -166,11 +200,12 @@ public sealed partial class SceneCompiler
             previous=q;
         }
         // Markers belong to actual samples, never to artificial cubic subdivision points.
-        foreach(var i in selected) f.Marker(map(new(line.Data.X(i),line.Data.Y(i))),line.Marker,line.MarkerSize,line.Color,clip);
+        foreach(var i in selected) f.Marker(map(new(data.X(i),data.Y(i))),line.Marker,line.MarkerSize,line.Color,clip);
     }
 
     private static void BuildAxes(ChartDocument d, ChartLayout l, FrameBuilder f)
     {
+        if (l.MeasuredAxes is { } measured) { measured.Draw(d, l, f); return; }
         var full=new RectD(0,0,f.Width,f.Height); var start=f.Count;
         var near=0; var far=0;
         foreach(var a in d.YAxes)
@@ -291,7 +326,7 @@ public sealed partial class SceneCompiler
     /// <summary>Sutherland-Hodgman clipping in double precision, before packing float geometry.</summary>
     internal static void FillPolygon(FrameBuilder f,IReadOnlyList<PointD> points,ColorRgba color,RectD clip)
     {
-        if(points.Any(p=>!p.IsFinite)) return;
+        if(color.A <= 0 || points.Any(p=>!p.IsFinite)) return;
         var polygon=points.ToList();
         for(var edge=0;edge<4;edge++)
         {

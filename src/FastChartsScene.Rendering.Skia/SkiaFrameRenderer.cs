@@ -7,7 +7,7 @@ namespace FastChartsScene.Rendering.Skia;
 
 /// <summary>Skia vector/text backend with a depth-correct CPU raster path for 3D fallback and PNG.
 /// GPU presentation remains the chart control's default. The host determines Skia's acceleration.</summary>
-public sealed class SkiaFrameRenderer : IDisposable
+public sealed class SkiaFrameRenderer : IDisposable, ITextMeasurer
 {
     private readonly SKPaint _paint=new() { IsAntialias=true,Color=SKColors.White };
     private readonly SKTypeface _regular=SKTypeface.FromFamilyName("sans-serif",SKFontStyle.Normal);
@@ -78,10 +78,24 @@ public sealed class SkiaFrameRenderer : IDisposable
         }
         if(labels) foreach(var label in frame.Metadata.Labels) DrawLabel(canvas,label);
     }
+    private SKFont Font(double size, bool bold)
+    {
+        var key = ((float)size, bold);
+        if (!_fonts.TryGetValue(key, out var font)) _fonts[key] = font = new SKFont(bold ? _bold : _regular, (float)size);
+        return font;
+    }
+    /// <summary>Uses the identical typefaces and font objects as DrawLabel. Host owns lifetime.</summary>
+    public TextMeasurement Measure(string text, double size, bool bold = false)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(text);
+        if (!double.IsFinite(size) || size <= 0 || size > 4096) throw new ArgumentOutOfRangeException(nameof(size));
+        var advance = Font(size, bold).MeasureText(text, out var bounds);
+        return new(advance, new(bounds.Left, bounds.Top, bounds.Width, bounds.Height));
+    }
     public void DrawLabel(SKCanvas canvas,TextLabel label)
     {
-        var key=((float)label.Size,label.Bold);
-        if(!_fonts.TryGetValue(key,out var font)) _fonts[key]=font=new SKFont(label.Bold?_bold:_regular,(float)label.Size);
+        var font = Font(label.Size, label.Bold);
         _paint.Color=Color(ColorRgba.Parse(label.Color)); _paint.Style=SKPaintStyle.Fill;
         var align=label.Align=="center"?SKTextAlign.Center:label.Align=="right"?SKTextAlign.Right:SKTextAlign.Left;
         canvas.Save(); canvas.Translate((float)label.X,(float)label.Y); canvas.RotateDegrees((float)label.Rotation);

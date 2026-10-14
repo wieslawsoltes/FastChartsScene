@@ -1,3 +1,4 @@
+import {validateRenderIssues} from './render-issue-tests.mjs';
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
 import {PNG} from 'pngjs';
@@ -48,4 +49,5 @@ export async function validateAutomaticAxes(page,{prefix,backend,dpr,output,scen
   await load([1e12,1e12+1],'Linear',"'fixed'0,,");const expected=(await labels('explicit-precision'));
   assert(expected.length>=2);assert(expected.every(t=>t===expected[0]),'Explicit formatting must not be rewritten');
  });
+ await validateRenderIssues(page,{prefix,backend,dpr,output,scenario,inspect,saved,waitRendered,download});
 }

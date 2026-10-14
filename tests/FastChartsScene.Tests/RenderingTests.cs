@@ -43,6 +43,7 @@ internal static partial class Program
             Throws<InvalidOperationException>(()=>new RenderFrame([],m,l).Validate());
             new RenderFrame([],m with { VertexCount=0 },l).Validate();
         });
+        RegisterIssueRegressionTests();
         RegisterSceneTests();
         RegisterCursorIndexReviewTests();
         RegisterCursorValueFormatTests();

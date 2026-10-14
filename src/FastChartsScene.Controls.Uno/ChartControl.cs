@@ -48,6 +48,7 @@ public sealed partial class ChartControl : UserControl,IDisposable
     public event EventHandler? RenderCompleted;
     public ChartControl()
     {
+        _compiler.TextMeasurer = _overlay.TextMeasurer;
         IsTabStop=true; HorizontalContentAlignment=HorizontalAlignment.Stretch; VerticalContentAlignment=VerticalAlignment.Stretch;
         var host=new Canvas { IsHitTestVisible=false }; host.Children.Add(_gpu);
         var root=new Grid { Background=new SolidColorBrush(Microsoft.UI.Colors.Transparent) }; root.Children.Add(host); root.Children.Add(_overlay); Content=root;
