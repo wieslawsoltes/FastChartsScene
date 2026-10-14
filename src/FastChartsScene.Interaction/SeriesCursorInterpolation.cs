@@ -146,30 +146,67 @@ public sealed partial class ChartInteraction
         private readonly Node[] _nodes;
         public CursorSegmentIndex(IDataSource data)
         {
-            var segments = new List<Segment>();
-            for (var i = 0; i + 1 < data.Count; i++)
+            // Count eligible adjacent pairs first. Exact arrays avoid List growth and
+            // ToArray copies; all-gap sources retain no sample-sized storage. Sources
+            // are immutable, so this pass cannot change the population of the next.
+            var count = 0;
+            var previousY = data.Y(0);
+            for (var i = 1; i < data.Count; i++)
             {
-                var ax = data.X(i); var bx = data.X(i + 1); var ay = data.Y(i); var by = data.Y(i + 1);
-                if (double.IsNaN(ay) && double.IsNaN(by)) continue;
-                var loY = double.IsNaN(ay) ? by : double.IsNaN(by) ? ay : Math.Min(ay, by);
-                var hiY = double.IsNaN(ay) ? by : double.IsNaN(by) ? ay : Math.Max(ay, by);
-                segments.Add(new(i, Math.Min(ax, bx), Math.Max(ax, bx), loY, hiY));
+                var currentY = data.Y(i);
+                if (!double.IsNaN(previousY) || !double.IsNaN(currentY)) count++;
+                previousY = currentY;
             }
-            _segments = segments.ToArray();
+            if (count == 0) { _segments = []; _nodes = []; return; }
+            _segments = new Segment[count];
+            var next = 0; var ax = data.X(0); var ay = data.Y(0);
+            for (var i = 1; i < data.Count; i++)
+            {
+                var bx = data.X(i); var by = data.Y(i);
+                if (!double.IsNaN(ay) || !double.IsNaN(by))
+                {
+                    var loY = double.IsNaN(ay) ? by : double.IsNaN(by) ? ay : Math.Min(ay, by);
+                    var hiY = double.IsNaN(ay) ? by : double.IsNaN(by) ? ay : Math.Max(ay, by);
+                    _segments[next++] = new(i - 1, Math.Min(ax, bx), Math.Max(ax, bx), loY, hiY);
+                }
+                ax = bx; ay = by;
+            }
             Array.Sort(_segments, static (a, b) => { var c = a.MinX.CompareTo(b.MinX); return c == 0 ? a.Index.CompareTo(b.Index) : c; });
-            var nodes = new List<Node>(); if (_segments.Length > 0) Build(nodes, 0, _segments.Length); _nodes = nodes.ToArray();
+            _nodes = new Node[NodeCount(count)];
+            next = 0; Build(0, count, ref next);
         }
-        private int Build(List<Node> nodes, int start, int count)
+        private static int NodeCount(int count)
         {
-            var minX = double.PositiveInfinity; var maxX = double.NegativeInfinity; var minY = minX; var maxY = maxX;
-            for (var i = start; i < start + count; i++)
+            if (count <= 16) return 1;
+            var half = count / 2;
+            return checked(1 + NodeCount(half) + NodeCount(count - half));
+        }
+        private int Build(int start, int count, ref int next)
+        {
+            var at = next++;
+            if (count > 16)
             {
-                var s = _segments[i]; minX = Math.Min(minX, s.MinX); maxX = Math.Max(maxX, s.MaxX);
-                minY = Math.Min(minY, s.MinY); maxY = Math.Max(maxY, s.MaxY);
+                var half = count / 2;
+                var left = Build(start, half, ref next);
+                var right = Build(start + half, count - half, ref next);
+                var a = _nodes[left]; var b = _nodes[right];
+                // Merge conservative child bounds once, instead of rescanning every
+                // descendant segment at every tree level. Sorted traversal is unchanged.
+                _nodes[at] = new(Math.Min(a.MinX, b.MinX), Math.Max(a.MaxX, b.MaxX),
+                    Math.Min(a.MinY, b.MinY), Math.Max(a.MaxY, b.MaxY), start, count, left, right);
             }
-            var at = nodes.Count; nodes.Add(default); var left = -1; var right = -1;
-            if (count > 16) { var half = count / 2; left = Build(nodes, start, half); right = Build(nodes, start + half, count - half); }
-            nodes[at] = new(minX, maxX, minY, maxY, start, count, left, right); return at;
+            else
+            {
+                var minX = double.PositiveInfinity; var maxX = double.NegativeInfinity;
+                var minY = minX; var maxY = maxX;
+                for (var i = start; i < start + count; i++)
+                {
+                    var s = _segments[i]; minX = Math.Min(minX, s.MinX); maxX = Math.Max(maxX, s.MaxX);
+                    minY = Math.Min(minY, s.MinY); maxY = Math.Max(maxY, s.MaxY);
+                }
+                _nodes[at] = new(minX, maxX, minY, maxY, start, count, -1, -1);
+            }
+            return at;
         }
         public void Visit(ref SegmentCursorQuery query) { if (_nodes.Length > 0) Visit(0, ref query); }
         private void Visit(int index, ref SegmentCursorQuery query)

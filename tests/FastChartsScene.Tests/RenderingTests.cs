@@ -44,6 +44,7 @@ internal static partial class Program
             new RenderFrame([],m with { VertexCount=0 },l).Validate();
         });
         RegisterSceneTests();
+        RegisterCursorIndexReviewTests();
     }
     static partial void RegisterSceneTests();
 }
