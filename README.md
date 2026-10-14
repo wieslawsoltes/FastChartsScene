@@ -45,6 +45,11 @@ Financial, scatter-only and cubic results remain explicitly original. See the
 [interpolated cursor guide](docs/INTERPOLATED-CURSOR-VALUES.md) for numerical, API,
 CSV and performance contracts.
 
+The **Format** button provides Compact, Exact and Scientific presets plus independent
+X/value numeric formats. Held snapshots, full-precision details and CSV stay unchanged.
+See [cursor formatting and index construction](docs/CURSOR-FORMATTING-AND-INDEXES.md)
+for the reusable API, validation and cold-memory improvements.
+
 ## Axis ticks and labels
 
 XY axes support exact custom tick positions and text, invariant numeric/date formats,

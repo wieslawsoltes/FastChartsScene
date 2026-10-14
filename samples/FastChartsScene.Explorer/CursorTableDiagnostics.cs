@@ -29,11 +29,11 @@ public static partial class BrowserBridge
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(node); i++)
             foreach (var child in CursorTableChildren(VisualTreeHelper.GetChild(node, i))) yield return child;
     }
-    // The native ComboBox template also owns a ListView (and may own an editable
-    // TextBox). Resolve the table's named parts, not arbitrary template descendants.
-    // Single keeps missing/duplicate named parts a diagnostic failure.
+    // Resolve the XAML name scope, not a realized visual subtree: a collapsed
+    // UserControl need not have applied its template yet. The native ComboBox's
+    // own ListView must never be confused with the named result list.
     private static T CursorTablePart<T>(string name) where T : FrameworkElement
-        => CursorTableChildren(Page!.CursorTable).OfType<T>().Single(part => part.Name == name);
+        => Page!.CursorTable.FindName(name) as T ?? throw new InvalidOperationException($"Cursor table part {name} was not found in its XAML name scope.");
 #if __WASM__
     [JSExport]
 #endif
@@ -43,7 +43,8 @@ public static partial class BrowserBridge
         var visual = CursorTableChildren(table).ToArray();
         return JsonSerializer.Serialize(new CursorTableSnapshot(chart.CursorValuesEnabled, chart.CursorValuesAreActive,
             table.IsHeld, table.StatusText, table.CreatedRows, table.UpdatedRows, chart.CursorValuesQueryCount,
-            chart.CursorValuesPublishCount, CursorTableChildren(CursorTablePart<ListView>("Results")).OfType<ListViewItem>().Count(), table.Snapshot().ToArray(),
+            chart.CursorValuesPublishCount, table.Visibility == Visibility.Collapsed ? 0 :
+                CursorTableChildren(CursorTablePart<ListView>("Results")).OfType<ListViewItem>().Count(), table.Snapshot().ToArray(),
             visual.OfType<TextBlock>().Where(t => t.Visibility == Visibility.Visible).Select(t => t.Text).ToArray()), CursorTableJsonContext.Default.CursorTableSnapshot);
     }
 #if __WASM__
@@ -85,6 +86,8 @@ public static partial class BrowserBridge
     public static string CheckCursorTableReuse()
     {
         var table = new CursorResultsTable();
+        if (table.FindName("Results") is not ListView || table.FindName("Details") is not TextBox || table.FindName("TrackingModeChoice") is not ComboBox)
+            throw new InvalidOperationException("Constructed cursor-table parts are not registered in their XAML name scope.");
         var value = new SeriesCursorValue("id", "Source <&> \"quoted\"", new(1,0,0,1), 3, new(4,12), "x", "y", null, null);
         SeriesCursorValue[] input = [value]; table.SetValues(input); var row = table.Rows[0];
         input[0] = value with { Data = new(5, 20) };
