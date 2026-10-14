@@ -103,6 +103,9 @@ public sealed partial class ChartInteraction
             if (location.X < Math.Min(a.X, b.X) || location.X > Math.Max(a.X, b.X)) return;
             double py;
             if (a.X == b.X) py = Math.Clamp(location.Y, Math.Min(a.Y, b.Y), Math.Max(a.Y, b.Y));
+            // A weighted sum of identical doubles can round away from the plateau.
+            // Keep the original projection so the endpoint value is copied exactly.
+            else if (a.Y == b.Y) py = a.Y;
             else
             {
                 var t = Ratio(location.X, a.X, b.X);

@@ -72,3 +72,23 @@ downloaded CSV identity, atomic invalid drafts, Cancel/presets, compact viewport
 and isolated retained-row contracts. Existing browser suites remain enabled; their
 required totals become 197 WebGL, 192 Skia and 48 axis scenarios (437 altogether).
 Native OS/hardware and broader-browser qualification remain separate work.
+
+## Final local-work reconciliation and plateau precision
+
+The unpublished exact-toggle prototype is superseded by the native Format editor's
+Exact preset and immutable per-column formats. Its allocation work is covered by the
+exact-size arrays above; the newer constructor also avoids rereading adjacent samples.
+The fresh collapsed-table lookup correction is included in the integrated source.
+
+One independent correction was recovered from the local continuation: horizontal
+segments now retain the original projected Y instead of computing a weighted sum of
+two identical doubles. Such a sum can round away from the endpoint projection, causing
+an unnecessary inverse-axis round trip and a changed last bit in a constant plateau.
+The fix applies to flat linear segments and the horizontal edges of both step methods;
+non-horizontal and vertical intersections retain their existing calculations.
+
+The regression checks 999 interior fractions for each of three methods, linear/log Y,
+normal/inverted axes and ordered/retained-freeform queries. Result Y must match the
+original plateau bits, and both original endpoint records and index reuse are checked.
+The expected portable suite is now 368 tests; the existing 437 native browser scenarios
+are retained unchanged. Only completed exact-revision CI results establish acceptance.
