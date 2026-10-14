@@ -25,10 +25,12 @@ public static class Consumer
         document.XAxis.Range=new AxisRange(0,3);
         document.Series.Add(new LineSeries { Data=new UniformData(0,1,[0,1,-1,0]) });
         using var copy=ChartJson.Read(ChartJson.Write(document));
-        var frame=new SceneCompiler().Compile(copy,640,480);
+        using var renderer=new SkiaFrameRenderer();
+        var compiler = new SceneCompiler { TextMeasurer = renderer };
+        var frame=compiler.Compile(copy,640,480);
+        _ = frame.Layout.AxisLabels; _ = compiler.TextMeasurementCount;
         var input=new ChartInteraction(copy); input.Zoom(frame,new PointD(300,200),.8); input.Undo();
         _=Fourier.Spectrum(new double[64],1024);
-        using var renderer=new SkiaFrameRenderer();
         return renderer.ExportPng(frame);
     }
 }

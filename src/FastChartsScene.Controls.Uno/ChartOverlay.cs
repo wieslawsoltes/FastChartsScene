@@ -10,6 +10,7 @@ namespace FastChartsScene.Controls.Uno;
 internal sealed partial class ChartOverlay : SKCanvasElement,IDisposable
 {
     private readonly SkiaFrameRenderer _renderer=new();
+    internal ITextMeasurer TextMeasurer => _renderer;
     private readonly SKPaint _paint=new() { IsAntialias=true };
     public RenderFrame? Frame { get; set; }
     public bool DrawGeometry { get; set; }
