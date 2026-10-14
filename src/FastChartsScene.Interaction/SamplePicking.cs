@@ -48,7 +48,7 @@ public sealed partial class ChartInteraction
         if (end - first <= 2048)
             return Scan(data, x, y, pane, location, radius, transpose, first, end);
         if (!indexes.TryGetValue(data, out var index))
-        { index = new(data); indexes.Add(data, index); built = true; }
+        { index = RetainSourceIndex(indexes, data, new PointSpatialIndex(data)); built = true; }
         return index.Nearest(x, y, pane, location, radius, transpose);
     }
     // Search projected positions directly instead of inverse-transforming the cursor window.
@@ -98,5 +98,5 @@ public sealed partial class ChartInteraction
         return new(best, 0, end - first);
     }
     /// <summary>Release source indexes explicitly on host unload or when no more queries are needed.</summary>
-    public void ClearPickingCache() { _sampleIndexes.Clear(); ClearFinancialPickingCache(); LastSampleQueryVisits = LastSampleQueryTests = 0; }
+    public void ClearPickingCache() { _sampleIndexes.Clear(); _cursorSegmentIndexes.Clear(); ClearFinancialPickingCache(); LastSampleQueryVisits = LastSampleQueryTests = 0; }
 }

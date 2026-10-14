@@ -8,11 +8,11 @@
     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="60"/><ColumnDefinition Width="130"/><ColumnDefinition Width="130"/><ColumnDefinition Width="64"/></Grid.ColumnDefinitions>
     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
      <Border Background="{x:Bind Swatch,Mode=OneWay}" Width="8" Height="8"/>
-     <TextBlock Text="{x:Bind Title,Mode=OneWay}" FontSize="11" MaxWidth="240" TextTrimming="CharacterEllipsis"/>
+     <TextBlock Text="{x:Bind Title,Mode=OneWay}" ToolTipService.ToolTip="{x:Bind Title,Mode=OneWay}" FontSize="11" MaxWidth="240" TextTrimming="CharacterEllipsis"/>
     </StackPanel>
-    <TextBlock Grid.Column="1" Text="{x:Bind IndexText,Mode=OneWay}" FontSize="11" VerticalAlignment="Center" TextAlignment="Right"/>
-    <TextBlock Grid.Column="2" Text="{x:Bind XText,Mode=OneWay}" FontSize="11" VerticalAlignment="Center" TextAlignment="Right"/>
-    <TextBlock Grid.Column="3" Text="{x:Bind YText,Mode=OneWay}" FontSize="11" VerticalAlignment="Center" TextAlignment="Right"/>
+    <TextBlock Grid.Column="1" Text="{x:Bind IndexText,Mode=OneWay}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{x:Bind IndexText,Mode=OneWay}" FontSize="11" VerticalAlignment="Center" TextAlignment="Right"/>
+    <TextBlock Grid.Column="2" Text="{x:Bind XText,Mode=OneWay}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{x:Bind XText,Mode=OneWay}" FontSize="11" VerticalAlignment="Center" TextAlignment="Right"/>
+    <TextBlock Grid.Column="3" Text="{x:Bind YText,Mode=OneWay}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{x:Bind YText,Mode=OneWay}" FontSize="11" VerticalAlignment="Center" TextAlignment="Right"/>
     <TextBlock Grid.Column="4" Text="{x:Bind FieldText,Mode=OneWay}" FontSize="11" VerticalAlignment="Center"/>
    </Grid>
   </DataTemplate>
@@ -25,10 +25,39 @@
    <Thumb.Template><ControlTemplate TargetType="Thumb"><Grid Background="{TemplateBinding Background}"><Border Height="1" Width="40" Background="#777777" VerticalAlignment="Center" HorizontalAlignment="Center"/></Grid></ControlTemplate></Thumb.Template>
   </Thumb>
   <Grid Grid.Row="1" Padding="7,2" ColumnSpacing="8" Background="#E5E5E5">
-   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
    <TextBlock x:Name="Status" Text="Cursor values · move over a chart" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-   <ToggleButton x:Name="Hold" Grid.Column="1" Content="Hold" AutomationProperties.Name="Hold cursor values" MinHeight="24" Padding="8,1" FontSize="11" Checked="HoldChanged" Unchecked="HoldChanged"/>
-   <Button Grid.Column="2" Content="CSV" AutomationProperties.Name="Export cursor values" MinHeight="24" Padding="8,1" FontSize="11" Click="ExportClicked"/>
+   <ComboBox x:Name="TrackingModeChoice" Grid.Column="1" Width="124" MinHeight="24" Padding="5,0" FontSize="11" Visibility="Collapsed"
+    AutomationProperties.Name="Cursor tracking mode" AutomationProperties.HelpText="Nearest X shows original samples. Interpolated calculates linear and stepped crossings; Calc Y and endpoint indices identify calculated rows. Financial, scatter-only and cubic values stay original. Changing mode clears Hold."
+    SelectionChanged="TrackingModeSelected">
+    <ComboBoxItem Content="Nearest X"/><ComboBoxItem Content="Interpolated"/>
+   </ComboBox>
+   <Button x:Name="NumberFormatButton" Grid.Column="2" Content="Format" Visibility="Collapsed" MinHeight="24" Padding="6,1" FontSize="11"
+    AutomationProperties.Name="Cursor number format" ToolTipService.ToolTip="Display precision and notation (source values stay exact)">
+    <Button.Flyout>
+     <Flyout x:Name="NumberFormatFlyout" Opened="FormatEditorOpened">
+      <StackPanel Width="236" Spacing="8">
+       <TextBlock Text="Cursor number formats" FontSize="13" FontWeight="SemiBold"/>
+       <StackPanel Orientation="Horizontal" Spacing="6">
+        <Button Content="Compact" Tag="G9" FontSize="11" Padding="5,3" Click="ApplyFormatPreset" AutomationProperties.Name="Compact cursor numbers"/>
+        <Button Content="Exact" Tag="R" FontSize="11" Padding="5,3" Click="ApplyFormatPreset" AutomationProperties.Name="Exact cursor numbers"/>
+        <Button Content="Scientific" Tag="E6" FontSize="11" Padding="5,3" Click="ApplyFormatPreset" AutomationProperties.Name="Scientific cursor numbers"/>
+       </StackPanel>
+       <TextBox x:Name="XFormatDraft" Header="X number format" FontSize="12" MaxLength="64" AutomationProperties.Name="Cursor X number format"/>
+       <TextBox x:Name="ValueFormatDraft" Header="Value number format" FontSize="12" MaxLength="64" AutomationProperties.Name="Cursor value number format"/>
+       <TextBlock Text="G9 · R · F2 · E6 · 0.00 'mV'" FontSize="11"/>
+       <TextBlock Text="Display only. Details and CSV retain full precision." FontSize="11" TextWrapping="Wrap"/>
+       <TextBlock x:Name="FormatError" Foreground="#B3261E" FontSize="11" TextWrapping="Wrap" AutomationProperties.Name="Cursor format validation"/>
+       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
+        <Button Content="Cancel" FontSize="12" Click="CancelNumberFormat" AutomationProperties.Name="Cancel cursor number format"/>
+        <Button Content="Apply" FontSize="12" Click="ApplyNumberFormat" AutomationProperties.Name="Apply cursor number format"/>
+       </StackPanel>
+      </StackPanel>
+     </Flyout>
+    </Button.Flyout>
+   </Button>
+   <ToggleButton x:Name="Hold" Grid.Column="3" Content="Hold" AutomationProperties.Name="Hold cursor values" MinHeight="24" Padding="8,1" FontSize="11" Checked="HoldChanged" Unchecked="HoldChanged"/>
+   <Button Grid.Column="4" Content="CSV" AutomationProperties.Name="Export cursor values" MinHeight="24" Padding="8,1" FontSize="11" Click="ExportClicked"/>
   </Grid>
   <ScrollViewer Grid.Row="2" HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Auto" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
    <Grid MinWidth="660">
@@ -37,8 +66,8 @@
      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="60"/><ColumnDefinition Width="130"/><ColumnDefinition Width="130"/><ColumnDefinition Width="64"/></Grid.ColumnDefinitions>
      <TextBlock Text="Series" FontSize="11" FontWeight="SemiBold"/>
      <TextBlock Grid.Column="1" Text="Index" FontSize="11" TextAlignment="Right"/>
-     <TextBlock Grid.Column="2" Text="Original X" FontSize="11" TextAlignment="Right"/>
-     <TextBlock Grid.Column="3" Text="Original value" FontSize="11" TextAlignment="Right"/>
+     <TextBlock x:Name="ResultXHeader" Grid.Column="2" Text="Original X" FontSize="11" TextAlignment="Right"/>
+     <TextBlock x:Name="ResultValueHeader" Grid.Column="3" Text="Original value" FontSize="11" TextAlignment="Right"/>
      <TextBlock Grid.Column="4" Text="Field" FontSize="11"/>
     </Grid>
     <ListView x:Name="Results" Grid.Row="1" ItemsSource="{x:Bind Rows}" ItemTemplate="{StaticResource ResultTemplate}" SelectionMode="Single" SelectionChanged="SelectionChanged" ScrollViewer.VerticalScrollBarVisibility="Visible" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Same-pane cursor results">
@@ -47,6 +76,6 @@
     </ListView>
    </Grid>
   </ScrollViewer>
-  <TextBox x:Name="Details" Grid.Row="3" FontSize="10" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0,1,0,0" Padding="6,3" AutomationProperties.Name="Original cursor value details"/>
+  <TextBox x:Name="Details" Grid.Row="3" FontSize="10" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0,1,0,0" Padding="6,3" AutomationProperties.Name="Original cursor value details" AutomationProperties.HelpText="Full-precision result and original sample or interpolation endpoint values."/>
  </Grid>
 </UserControl>

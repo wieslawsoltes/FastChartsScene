@@ -8,13 +8,13 @@ This is an implementation inventory, not a claim of full LightningChart .NET par
 | XY lines | Sampled/point lines, scatter, steps, monotone cubic, markers, gaps, area baseline | All line/marker styles, dashes, per-point styles, spline families, joins/caps and original API |
 | Data | Immutable sources, single-copy synchronized rolling snapshots, bulk FIFO append, ordered searches, interpolation, extrema/gap-preserving screen reduction | Incremental GPU uploads, zero-copy source APIs, additional retention modes and sustained-load guarantees |
 | Bars/ranges | Positive/negative stacks, groups, horizontal bars, bands, asymmetric errors; atomic fit includes totals, widths and uncertainty | All grouping/range styles, per-series editing and original APIs |
-| Financial | Candlestick/OHLC; SMA/EMA/RSI/Bollinger calculations; all-series data export | Full financial tools/indicators, market calendars, finance-specific picking/editing |
+| Financial | Candlestick/OHLC; SMA/EMA/RSI/Bollinger calculations; original-price nearest-point/nearest-X tracking; same-pane cursor tables; all-series data export | Full financial tools/indicators, market calendars and financial editing |
 | Intensity | Regular heatmaps/contours, immutable custom gradient/stepped palettes, linear/log automatic or manual color ranges, reversal, missing/outlier colors, pane-aware colorbars, reusable Uno editor, exact regular heatmap cell picking, viewport culling, shared scalar statistics, cached contour topology, persisted settings | GPU scalar textures, bilinear/per-fragment scalar mapping, irregular grids, contour/spatial picking and data editing; complete original palette/colorbar API |
 | Polar/Smith | Linear unfilled curves and graticules | All series styles, annotations, clipping and navigation compatibility |
 | 3D | Lit surfaces, waterfalls, bars, points/lines, meshes/OBJ; correct spatial fit; depth-correct CPU fallback and PNG | Volume rendering, complete spatial families, translucent sorting, spatial picking/slicing, full axes/annotations |
 | Pie | Extruded pie/doughnut, height, explosion, JSON/CSV/PNG | Slice labels/legends, complete picking/layout/style behavior |
 | DSP | FFT/inverse, windows, calibrated spectra, STFT, basic low-pass and indicators | Streaming transforms, full filters and DSP API |
-| Input | Anchored zoom, pan/orbit, rectangle zoom, XY sample queries and regular heatmap cell queries, legend toggles, undo/redo, pinch adapter | Picking/editing for every series, additional tools, complete touch/pen/accessibility matrix |
+| Input | Anchored zoom, pan/orbit, rectangle zoom, XY sample queries, linear/step intersections with endpoint provenance, regular heatmap cell queries, legend toggles, undo/redo, pinch adapter | Picking/editing for every series, additional tools, complete touch/pen/accessibility matrix |
 | Annotations | XY text, horizontal/vertical lines and rectangles | Interactive editing, complete annotation set, circular/spatial annotations |
 | Persistence | Versioned bounded JSON for every current model; exact data/style roundtrip, duplicate-key checks | LightningChart file compatibility, stable external series IDs, future-version migrations |
 | Export | 2D/3D PNG, clipped 2D SVG, first-series and complete-model CSV, chart JSON, frame metadata | 3D vector formats, PDF/document/print/clipboard integration and original export API |
@@ -63,3 +63,11 @@ and visual alignment, not every original command, property or exact pixel compat
 [AXIS-TICKS.md](AXIS-TICKS.md) documents the immutable tick/format APIs, reusable Uno
 editor, saved settings, shared-renderer exports, cache/per-point improvements and explicit
 style/3D boundaries. This is not complete reference tick-style or API compatibility.
+
+## Cursor table tracking increment
+
+[INTERPOLATED-CURSOR-VALUES.md](INTERPOLATED-CURSOR-VALUES.md) documents opt-in linear/
+stepped same-pane crossings, source endpoint provenance, original-only fallbacks,
+compact native mode selection, Hold/CSV, reentrant-query guards and retained search
+indexes. Nearest-X remains the default. Cubic tracking, persistent graphical multicursors,
+all-family picking and full reference API/pixel/hardware acceptance remain open.
