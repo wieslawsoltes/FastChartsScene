@@ -49,7 +49,7 @@ public static partial class BrowserBridge
 #endif
     public static string CursorTrackingOptionBounds(int index)
     {
-        var combo = CursorTableChildren(Page!.CursorTable).OfType<ComboBox>().Single();
+        var combo = CursorTablePart<ComboBox>("TrackingModeChoice");
         return combo.IsDropDownOpen && index >= 0 && index < combo.Items.Count && combo.ContainerFromIndex(index) is FrameworkElement item ? Bounds(item) : "";
     }
 #if __WASM__

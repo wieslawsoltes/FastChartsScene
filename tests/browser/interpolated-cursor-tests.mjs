@@ -75,7 +75,13 @@ export async function validateInterpolatedCursors(page,h){
   const rows=csvRows((await readFile(path)).toString()),line=rows.find(r=>r.SeriesTitle==='Average'),financial=rows.find(r=>r.SeriesTitle==='Original OHLC');
   assert.equal(line.ResultKind,'Interpolated');assert.equal(line.Index,'0');assert.equal(line.X,'4');assert.equal(line.Value,'5');assert.equal(line.EndIndex,'1');assert.equal(line.EndX,'8');assert.equal(line.EndValue,'7');assert.equal(line.Interpolation,'Linear');
   assert.equal(Number(line.ResultX),before.values[1].resultData.x);assert.equal(Number(line.ResultValue),before.values[1].resultData.y);
-  assert.equal(financial.ResultKind,'Original');assert.equal(financial.Volume,'12345');assert.equal(financial.EndIndex,'');
+  // At X=6.2, nearest-X selects the second ORIGINAL candle (X=8), not
+  // the first candle at X=4. Assert all original price/volume fields separately
+  // from the line's interpolated result; do not change production snap semantics.
+  assert.equal(before.values[0].index,1);assert.deepEqual(before.values[0].data,{x:8,y:3,isFinite:true});
+  assert.equal(financial.ResultKind,'Original');assert.equal(financial.Index,'1');assert.equal(financial.X,'8');assert.equal(financial.Value,'3');
+  assert.deepEqual(['Open','High','Low','Close','Volume'].map(k=>financial[k]),['2','4','1','3','50']);
+  assert.equal(financial.ResultX,'8');assert.equal(financial.ResultValue,'3');assert.equal(financial.EndIndex,'');
   await action('Hold cursor values');const live=await sample(.75,.1);await assertCrossing(live.values[1],.75,x=>5+(x-4)/2);
  });
  await scenario('interpolated cursor: vertical motion retains rows formatted values and geometry uploads',async()=>{

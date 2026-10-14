@@ -29,6 +29,11 @@ public static partial class BrowserBridge
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(node); i++)
             foreach (var child in CursorTableChildren(VisualTreeHelper.GetChild(node, i))) yield return child;
     }
+    // The native ComboBox template also owns a ListView (and may own an editable
+    // TextBox). Resolve the table's named parts, not arbitrary template descendants.
+    // Single keeps missing/duplicate named parts a diagnostic failure.
+    private static T CursorTablePart<T>(string name) where T : FrameworkElement
+        => CursorTableChildren(Page!.CursorTable).OfType<T>().Single(part => part.Name == name);
 #if __WASM__
     [JSExport]
 #endif
@@ -38,7 +43,7 @@ public static partial class BrowserBridge
         var visual = CursorTableChildren(table).ToArray();
         return JsonSerializer.Serialize(new CursorTableSnapshot(chart.CursorValuesEnabled, chart.CursorValuesAreActive,
             table.IsHeld, table.StatusText, table.CreatedRows, table.UpdatedRows, chart.CursorValuesQueryCount,
-            chart.CursorValuesPublishCount, visual.OfType<ListViewItem>().Count(), table.Snapshot().ToArray(),
+            chart.CursorValuesPublishCount, CursorTableChildren(CursorTablePart<ListView>("Results")).OfType<ListViewItem>().Count(), table.Snapshot().ToArray(),
             visual.OfType<TextBlock>().Where(t => t.Visibility == Visibility.Visible).Select(t => t.Text).ToArray()), CursorTableJsonContext.Default.CursorTableSnapshot);
     }
 #if __WASM__
@@ -55,7 +60,7 @@ public static partial class BrowserBridge
 #endif
     public static string CursorTableScroll()
     {
-        var list = CursorTableChildren(Page!.CursorTable).OfType<ListView>().Single();
+        var list = CursorTablePart<ListView>("Results");
         var scroll = CursorTableChildren(list).OfType<ScrollViewer>().First();
         var origin = scroll.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(0, 0));
         return JsonSerializer.Serialize(new CursorTableScrollSnapshot(scroll.VerticalOffset, scroll.ExtentHeight,
@@ -67,13 +72,13 @@ public static partial class BrowserBridge
 #endif
     public static string CursorTableRowBounds(int index)
     {
-        var list = CursorTableChildren(Page!.CursorTable).OfType<ListView>().Single();
+        var list = CursorTablePart<ListView>("Results");
         return list.ContainerFromIndex(index) is FrameworkElement item ? Bounds(item) : "";
     }
 #if __WASM__
     [JSExport]
 #endif
-    public static string CursorTableDetails() => CursorTableChildren(Page!.CursorTable).OfType<TextBox>().Single().Text;
+    public static string CursorTableDetails() => CursorTablePart<TextBox>("Details").Text;
 #if __WASM__
     [JSExport]
 #endif
