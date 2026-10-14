@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {validateCursorTableSizing} from './cursor-table-sizing-tests.mjs';
 import {validateInterpolatedCursors} from './interpolated-cursor-tests.mjs';
+import {validateCursorFormats} from './cursor-format-tests.mjs';
 import {resolve} from 'node:path';
 import {readFile} from 'node:fs/promises';
 
@@ -107,4 +108,5 @@ export async function validateCursorTable(page,h){
  });
  await validateCursorTableSizing(page,{inspect,scenario,output,setup,sample,action,state,currentFrame,stable});
  await validateInterpolatedCursors(page,{inspect,scenario,output,setup,sample,action,state,currentFrame,stable,load});
+ await validateCursorFormats(page,{inspect,scenario,output,setup,sample,action,state,currentFrame,stable});
 }

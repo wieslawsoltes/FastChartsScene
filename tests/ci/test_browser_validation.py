@@ -107,8 +107,8 @@ class EvidenceTests(unittest.TestCase):
     def test_all_existing_suites_accepted(self):
         self.evidence()
         result = self.aggregate()
-        self.assertEqual(421, result["totalBrowserScenarios"])
-        self.assertEqual({"webgl": 189, "skia": 184, "axis": 48}, result["suites"])
+        self.assertEqual(437, result["totalBrowserScenarios"])
+        self.assertEqual({"webgl": 197, "skia": 192, "axis": 48}, result["suites"])
 
     def test_completed_results_required_not_progress_file(self):
         document = self.result("axis")
