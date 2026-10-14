@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
 import {PNG} from 'pngjs';
+import {writeFile} from 'node:fs/promises';
 
 // Current native chart and toolbar exports; no alternate renderer or calculated
 // replacement image is used as evidence. Fixtures enter the bounded document API.
@@ -8,7 +9,26 @@ export async function validateRenderIssues(page,{prefix,backend,dpr,output,scena
  const original=await saved();
  const layout=()=>page.evaluate(()=>JSON.parse(globalThis.chartBridge.InspectMeasuredAxisLayout()));
  async function load(d){const before=await inspect();await page.evaluate(d=>globalThis.chartBridge.ImportDocument(JSON.stringify(d)),d);await waitRendered(before);await settled();}
- async function settled(){await page.waitForFunction(()=>{const c=JSON.parse(globalThis.chartBridge.Inspect()),m=JSON.parse(globalThis.chartBridge.InspectMeasuredAxisLayout());return !c.error&&Math.abs(c.bounds.width-m.width)<.01&&Math.abs(c.bounds.height-m.height)<.01;});}
+ async function settled(){
+  // Browser viewport resizing completes before Uno's queued page/Grid arrangement.
+  // A matching old frame and old chart size alone do not prove the requested resize.
+  // Observe the actual native page, document revision, viewport and stable chart bounds.
+  const deadline=Date.now()+45000;let previous='',since=0,last;
+  while(Date.now()<deadline){
+   await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
+   last=await page.evaluate(()=>{
+    const c=JSON.parse(globalThis.chartBridge.Inspect()),m=JSON.parse(globalThis.chartBridge.InspectMeasuredAxisLayout());
+    const current=globalThis.chartBridge.FinancialFrameIsCurrent(innerWidth,innerHeight)&&!c.error&&
+     c.bounds.x>=0&&c.bounds.y>=0&&c.bounds.right<=innerWidth+.01&&c.bounds.bottom<=innerHeight+.01&&
+     Math.abs(c.bounds.width-m.width)<.01&&Math.abs(c.bounds.height-m.height)<.01;
+    return {current,bounds:c.bounds,plot:c.plot,revision:c.revision,viewport:[innerWidth,innerHeight]};
+   });
+   const key=JSON.stringify(last);if(!last.current||key!==previous)since=Date.now();
+   if(last.current&&key===previous&&Date.now()-since>=200)return;
+   previous=key;
+  }
+  throw new Error('Native chart did not settle in the requested viewport: '+JSON.stringify(last));
+ }
  function fixture(){
   const d=structuredClone(original);d.title='Render issue regression';d.subtitle='';d.showLegend=false;d.showGrid=false;d.annotations=[];d.axisLayout='Layered';
   d.xAxes=d.xAxes.slice(0,1);d.yAxes=d.yAxes.slice(0,1);
@@ -51,8 +71,9 @@ export async function validateRenderIssues(page,{prefix,backend,dpr,output,scena
    const m=await layout(),visible=checkLayout(m).filter(l=>l.horizontal&&!l.isTitle);
    for(const endpoint of [1e12,1e12+1])assert(visible.some(l=>l.value===endpoint&&Number(l.label.text)===endpoint),'Missing precise endpoint '+endpoint);
    const stem=`${backend}-${dpr}-measured-${width}-${inverted}`;
-   const screen=PNG.sync.read(await page.screenshot({path:resolve(output,stem+'.png'),scale:'css'}));
    const chart=await inspect();
+   await writeFile(resolve(output,stem+'-layout.json'),JSON.stringify({layout:m,chart,viewport:page.viewportSize()},null,2));
+   const screen=PNG.sync.read(await page.screenshot({path:resolve(output,stem+'.png'),scale:'css'}));
    function ink(image,b,sx,sy,ox=0,oy=0){let n=0;
     for(let y=Math.max(0,Math.floor(oy+(b.y-1)*sy));y<Math.min(image.height,Math.ceil(oy+(b.bottom+1)*sy));y++)
      for(let x=Math.max(0,Math.floor(ox+(b.x-1)*sx));x<Math.min(image.width,Math.ceil(ox+(b.right+1)*sx));x++){
