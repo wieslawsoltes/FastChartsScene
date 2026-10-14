@@ -58,6 +58,11 @@ and cached automatic label generation. The compact Properties Editor exposes a
 SVG/PNG and extracted projects retain the settings. See the [axis tick guide](docs/AXIS-TICKS.md)
 for the reusable `AxisTickOptions`, `AxisTickText` and `AxisTicksEditor` APIs and styling boundaries.
 
+The native chart uses its text renderer’s font metrics to reserve XY tick/title margins.
+Crowded labels retain exact strings and expose visibility decisions instead of reducing
+numeric precision. Area/band opacity composes with the series alpha. See the
+[render-issue review](docs/RENDER-ISSUE-REVIEW.md) for APIs, export behavior and acceptance limits.
+
 ## Intensity charts
 
 Intensity heatmaps, contours, surfaces, waterfalls and spatial bars share reusable immutable color scales. Choose gradient or stepped palettes, reverse them, use automatic/manual linear or logarithmic color ranges, and display pane-aware colorbars. Regular XY heatmaps support exact stored-cell cursor values and highlighting. The inspector uses the separately reusable `IntensityScaleEditor` control, including custom palette stops and inline validation.

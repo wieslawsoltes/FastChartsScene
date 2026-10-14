@@ -4,7 +4,7 @@ This is an implementation inventory, not a claim of full LightningChart .NET par
 
 | Area | Implemented | Remaining compatibility work |
 | --- | --- | --- |
-| Axes | Linear/log/date/category transforms; calendar month/year and time-of-day intervals; inversion; layered/stacked/segmented panes; stable adjacent-value logarithms; owned category/segment arrays; exact custom ticks, invariant formats and retained tick generation | Scale breaks, per-tick styling/overlap control, complete multi-axis placement/editing and original semantics |
+| Axes | Linear/log/date/category transforms; calendar month/year and time-of-day intervals; inversion; layered/stacked/segmented panes; stable adjacent-value logarithms; owned category/segment arrays; exact custom ticks, invariant formats and retained tick generation; opt-in measured XY margins, used by the native control | Scale breaks, per-tick styling/custom overlap policies, complete multi-axis placement/editing and original semantics |
 | XY lines | Sampled/point lines, scatter, steps, monotone cubic, markers, gaps, area baseline | All line/marker styles, dashes, per-point styles, spline families, joins/caps and original API |
 | Data | Immutable sources, single-copy synchronized rolling snapshots, bulk FIFO append, ordered searches, interpolation, extrema/gap-preserving screen reduction | Incremental GPU uploads, zero-copy source APIs, additional retention modes and sustained-load guarantees |
 | Bars/ranges | Positive/negative stacks, groups, horizontal bars, bands, asymmetric errors; atomic fit includes totals, widths and uncertainty | All grouping/range styles, per-series editing and original APIs |
