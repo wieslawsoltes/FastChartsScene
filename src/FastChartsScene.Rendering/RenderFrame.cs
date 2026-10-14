@@ -10,7 +10,11 @@ public enum PrimitiveKind { Triangles, Points }
 public sealed record DrawBatch(int Start, int Count, PrimitiveKind Kind, bool DepthTest,
     RectD Clip, float[] Transform, float PointSize = 1);
 public sealed record TextLabel(string Text, double X, double Y, string Color, double Size = 12,
-    string Align = "left", double Rotation = 0, bool Bold = false);
+    string Align = "left", double Rotation = 0, bool Bold = false)
+{
+    /// <summary>Optional measured advance for metric-consistent SVG presentation.</summary>
+    public double? MeasuredAdvance { get; init; }
+}
 public sealed record HitRegion(string Kind, string Id, RectD Bounds);
 public sealed record FrameMetadata(double Width, double Height, string Background,
     DrawBatch[] Batches, TextLabel[] Labels, HitRegion[] Hits, RectD Plot, long Revision,
@@ -47,6 +51,9 @@ internal partial class RenderingJsonContext : JsonSerializerContext { }
 public sealed class ChartLayout
 {
     public RectD Plot { get; }
+    internal MeasuredAxisLayout? MeasuredAxes { get; set; }
+    /// <summary>Measured tick/title decisions, including unchanged full text of suppressed labels.</summary>
+    public IReadOnlyList<AxisLabelPlacement> AxisLabels => MeasuredAxes?.Placements ?? Array.Empty<AxisLabelPlacement>();
     public IReadOnlyDictionary<string, RectD> AxisPlots { get; }
     public IReadOnlyDictionary<string, ColorBarPlacement> ColorBars { get; }
     private ChartLayout(RectD plot, Dictionary<string, RectD> axisPlots, Dictionary<string, ColorBarPlacement> colorBars)
@@ -57,6 +64,8 @@ public sealed class ChartLayout
     }
     public RectD ForAxis(string id) => AxisPlots.TryGetValue(id, out var p) ? p : Plot;
     public static ChartLayout Create(ChartDocument document, double width, double height)
+        => Create(document, width, height, null);
+    internal static ChartLayout Create(ChartDocument document, double width, double height, AxisLayoutReservation? reservation)
     {
         ArgumentNullException.ThrowIfNull(document);
         if (!double.IsFinite(width) || !double.IsFinite(height) || width < 1 || height < 1)
@@ -79,6 +88,16 @@ public sealed class ChartLayout
         var actualRight = Math.Min(right, width * .2) + colorGutter;
         var actualTop = Math.Min(top, height * .25);
         var actualBottom = Math.Min(bottom, height * .25);
+        if (reservation is { } measured)
+        {
+            // Keep a positive plot on tiny surfaces. Text that cannot fit is retained
+            // in AxisLabels with a reason, not drawn outside the canvas or rounded.
+            var horizontal = Math.Min(1, (width - colorGutter) * .85 / Math.Max(1, measured.Left + measured.Right));
+            var vertical = Math.Min(1, height * .75 / Math.Max(1, measured.Top + measured.Bottom));
+            actualLeft = measured.Left * horizontal;
+            actualRight = measured.Right * horizontal + colorGutter;
+            actualTop = measured.Top * vertical; actualBottom = measured.Bottom * vertical;
+        }
         var plot = new RectD(actualLeft, actualTop, width - actualLeft - actualRight, height - actualTop - actualBottom);
         Dictionary<string, RectD> mapping = [];
         if (document.AxisLayout == AxisLayout.Stacked && document.View == ChartView.XY)

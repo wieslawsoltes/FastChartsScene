@@ -70,6 +70,8 @@ public static class SvgExport
             Element("text"); Number("x",label.X); Number("y",label.Y); Number("font-size",label.Size);
             Attribute("font-family","sans-serif"); Attribute("text-anchor",label.Align=="center"?"middle":label.Align=="right"?"end":"start");
             if(label.Bold) Attribute("font-weight","bold");
+            if(label.MeasuredAdvance is > 0)
+            { Number("textLength",label.MeasuredAdvance.Value); Attribute("lengthAdjust","spacingAndGlyphs"); }
             if(label.Rotation!=0) Attribute("transform",FormattableString.Invariant($"rotate({label.Rotation:R} {label.X:R} {label.Y:R})"));
             Color(ColorRgba.Parse(label.Color)); xml.WriteString(label.Text); xml.WriteEndElement();
         }
