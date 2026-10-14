@@ -45,6 +45,7 @@ internal static partial class Program
         });
         RegisterSceneTests();
         RegisterCursorIndexReviewTests();
+        RegisterCursorValueFormatTests();
     }
     static partial void RegisterSceneTests();
 }

@@ -22,7 +22,7 @@ public sealed partial class CursorResultsTable : UserControl
     public string StatusText => Status.Text;
     public event EventHandler? ExportRequested;
     public CursorResultsTable()
-    { Rows = new(_rows); InitializeComponent(); _trackingReady = true; SyncTrackingMode(); UpdateResultHeaders(); UpdateResizeAvailability(); HorizontalContentAlignment = HorizontalAlignment.Stretch; VerticalContentAlignment = VerticalAlignment.Stretch; }
+    { Rows = new(_rows); InitializeComponent(); _formatReady = true; UpdateFormatAvailability(); _trackingReady = true; SyncTrackingMode(); UpdateResultHeaders(); UpdateResizeAvailability(); HorizontalContentAlignment = HorizontalAlignment.Stretch; VerticalContentAlignment = VerticalAlignment.Stretch; }
     public void SetValues(IReadOnlyList<SeriesCursorValue> values, bool active = true)
     {
         ArgumentNullException.ThrowIfNull(values);
@@ -32,7 +32,7 @@ public sealed partial class CursorResultsTable : UserControl
         for (var i = 0; i < values.Count; i++)
         {
             calculated |= values[i].IsInterpolated;
-            if (i >= _rows.Count) { _rows.Add(new(values[i])); CreatedRows++; UpdatedRows++; }
+            if (i >= _rows.Count) { _rows.Add(new(values[i], NumberFormat)); CreatedRows++; UpdatedRows++; }
             else if (_rows[i].Update(values[i])) UpdatedRows++;
         }
         while (_rows.Count > values.Count) _rows.RemoveAt(_rows.Count - 1);
@@ -105,7 +105,19 @@ public sealed class CursorResultRow : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
     private static readonly PropertyChangedEventArgs AllPropertiesChanged = new(null);
     private string _exactX = "", _exactY = "";
-    public CursorResultRow(SeriesCursorValue value) { Set(value, true); }
+    private CursorValueFormat _format;
+    public CursorResultRow(SeriesCursorValue value) : this(value, CursorValueFormat.Default) { }
+    internal CursorResultRow(SeriesCursorValue value, CursorValueFormat format) { _format = format; Set(value, true); }
+    internal bool SetFormat(CursorValueFormat format)
+    {
+        if (_format == format) return false;
+        var previous = _format; _format = format;
+        // A format-only update does not reformat exact details, change the source,
+        // rebuild swatches or regenerate the other column's unchanged text.
+        if (previous.XFormat != format.XFormat) XText = format.FormatX(Value.ResultData.X);
+        if (previous.ValueFormat != format.ValueFormat) YText = format.FormatValue(Value.ResultData.Y);
+        PropertyChanged?.Invoke(this, AllPropertiesChanged); return true;
+    }
     internal static string Exact(double value) => value.ToString("R", CultureInfo.InvariantCulture);
     internal bool Update(SeriesCursorValue value)
     {
@@ -122,9 +134,9 @@ public sealed class CursorResultRow : INotifyPropertyChanged
         if (initial || previous.Index != value.Index || previous.Interpolation?.EndIndex != value.Interpolation?.EndIndex)
             IndexText = value.Index.ToString(CultureInfo.InvariantCulture) + (value.Interpolation is { } end ? "–" + end.EndIndex.ToString(CultureInfo.InvariantCulture) : "");
         if (initial || previousResult.X != result.X)
-        { XText = result.X.ToString("G9", CultureInfo.InvariantCulture); _exactX = Exact(result.X); }
+        { XText = _format.FormatX(result.X); _exactX = Exact(result.X); }
         if (initial || previousResult.Y != result.Y)
-        { YText = result.Y.ToString("G9", CultureInfo.InvariantCulture); _exactY = Exact(result.Y); }
+        { YText = _format.FormatValue(result.Y); _exactY = Exact(result.Y); }
         if (initial || previous.Field != value.Field || previous.IsInterpolated != value.IsInterpolated)
             FieldText = value.IsInterpolated ? "Calc Y" : value.Field?.ToString() ?? "Y";
         // Color-only and identity-only updates do not change the selected-row text.

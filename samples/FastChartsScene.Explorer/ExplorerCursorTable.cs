@@ -6,7 +6,7 @@ namespace FastChartsScene.Explorer;
 
 public sealed partial class ExplorerPage
 {
-    private readonly CursorResultsTable _cursorTable = new() { Visibility = Visibility.Collapsed, ResizeEnabled = true, TrackingModeSelectionEnabled = true };
+    private readonly CursorResultsTable _cursorTable = new() { Visibility = Visibility.Collapsed, ResizeEnabled = true, TrackingModeSelectionEnabled = true, NumberFormatSelectionEnabled = true };
     private bool _cursorTableVisible;
     private double _cursorTableHeight = 210;
     private ChartDocument? _cursorTableOwner;
