@@ -165,13 +165,18 @@ public sealed partial class SceneCompiler
 
     private void DrawLine(FrameBuilder f, LineSeries line, Axis x, RectD clip, Func<PointD,PointD> map)
     {
-        if (!_indexes.TryGetValue(line.Data, out var index))
+        // A source getter may replace the model source during cold construction.
+        // Keep the immutable source key and every point read from the same snapshot;
+        // the outer revision guard rejects the obsolete frame without poisoning the
+        // replacement source's retained index.
+        var data = line.Data;
+        if (!_indexes.TryGetValue(data, out var index))
         {
-            var candidate = new EnvelopeIndex(line.Data); SourceIndexBuildCount++;
-            if (!_indexes.TryGetValue(line.Data, out index)) { index = candidate; _indexes.Add(line.Data, index); }
+            var candidate = new EnvelopeIndex(data); SourceIndexBuildCount++;
+            if (!_indexes.TryGetValue(data, out index)) { index = candidate; _indexes.Add(data, index); }
         }
         var selected=index.Select(x,(int)Math.Ceiling(clip.Width));
-        IReadOnlyList<PointD> points=selected.Select(i=>new PointD(line.Data.X(i),line.Data.Y(i))).ToArray();
+        IReadOnlyList<PointD> points=selected.Select(i=>new PointD(data.X(i),data.Y(i))).ToArray();
         if(line.Interpolation==LineInterpolation.MonotoneCubic)
             points=GeometryAlgorithms.Monotone(XyData.FromPoints(points),8);
         PointD? previous=null;
@@ -195,7 +200,7 @@ public sealed partial class SceneCompiler
             previous=q;
         }
         // Markers belong to actual samples, never to artificial cubic subdivision points.
-        foreach(var i in selected) f.Marker(map(new(line.Data.X(i),line.Data.Y(i))),line.Marker,line.MarkerSize,line.Color,clip);
+        foreach(var i in selected) f.Marker(map(new(data.X(i),data.Y(i))),line.Marker,line.MarkerSize,line.Color,clip);
     }
 
     private static void BuildAxes(ChartDocument d, ChartLayout l, FrameBuilder f)

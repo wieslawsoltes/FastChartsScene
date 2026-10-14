@@ -34,6 +34,18 @@ internal static partial class Program
             return new(text.Length * size / 2, new(0, -size, text.Length * size / 2, size));
         }
     }
+    private sealed class ReplacingReviewData(IDataSource source) : IDataSource
+    {
+        public Action? Once;
+        public int Count => source.Count;
+        public bool IsOrdered => source.IsOrdered;
+        public double X(int index) => source.X(index);
+        public double Y(int index)
+        {
+            var callback = Once; Once = null; callback?.Invoke();
+            return source.Y(index);
+        }
+    }
     private static ChartDocument FillReviewDocument(bool band, float alpha)
     {
         var d = new ChartDocument { ShowLegend = false, ShowGrid = false, Theme = ChartTheme.Light };
@@ -165,6 +177,24 @@ internal static partial class Program
             using var d = LineDocument(); var c = new SceneCompiler { TextMeasurer = new MutatingReviewTextMeasurer(d) };
             Throws<InvalidOperationException>(() => c.Compile(d, 800, 600)); Equal(0, c.CompilationCount);
             var frame = c.Compile(d, 800, 600); Equal(d.Revision, frame.Metadata.Revision); frame.Validate();
+        });
+        Add("source replacement during cold envelope construction cannot poison the replacement cache", () => {
+            using var d = LineDocument(); var line = (LineSeries)d.Series[0];
+            var replacement = new XyData([0, 2, 4], [-1, 1, -1]);
+            var previous = new ReplacingReviewData(new UniformData(0, .01,
+                Enumerable.Range(0, 401).Select(i => Math.Sin(i * .05)).ToArray()));
+            line.Data = previous; var calls = 0;
+            previous.Once = () => { calls++; line.Data = replacement; };
+            var compiler = new SceneCompiler { TextMeasurer = new ReviewTextMeasurer() };
+            Throws<InvalidOperationException>(() => compiler.Compile(d, 800, 600));
+            Equal(1, calls); Equal(0, compiler.CompilationCount); Equal(1, compiler.SourceIndexBuildCount);
+            var recovered = compiler.Compile(d, 800, 600);
+            var expected = new SceneCompiler { TextMeasurer = new ReviewTextMeasurer() }.Compile(d, 800, 600);
+            True(recovered.Vertices.SequenceEqual(expected.Vertices));
+            True(recovered.Metadata.Labels.SequenceEqual(expected.Metadata.Labels));
+            Equal(d.Revision, recovered.Metadata.Revision); Equal(3, recovered.Metadata.SourcePoints);
+            Equal(2, compiler.SourceIndexBuildCount);
+            True(ReferenceEquals(recovered, compiler.Compile(d, 800, 600))); Equal(2, compiler.SourceIndexBuildCount);
         });
         Add("measured frame label snapshots survive later axis changes", () => {
             using var d = LineDocument(); var c = new SceneCompiler { TextMeasurer = new ReviewTextMeasurer() };

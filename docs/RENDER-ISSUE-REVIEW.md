@@ -66,10 +66,10 @@ This increment does not change circular/spatial axes, legends or colorbar typogr
 
 ## Validation and remaining scope
 
-Fourteen additional portable tests cover fill alpha, pixels/export, measured bounds,
+Fifteen additional portable tests cover fill alpha, pixels/export, measured bounds,
 collision decisions, original strings, secondary axes, tiny panes, cache invalidation
 and source-index retention. Five additional native scenarios per backend/DPR add twenty
-axis-suite cases. No existing scenario is removed. Required totals become 382 portable
+axis-suite cases. No existing scenario is removed. Required totals become 383 portable
 C# tests and 457 browser scenarios (197 WebGL, 192 Skia, 68 axis), plus 22 verifier tests,
 both Uno targets, all twelve packages and isolated/extracted consumers.
 
@@ -82,3 +82,8 @@ native OS/hardware/cross-browser/touch/accessibility and public package release 
 The arranged frame releases its live axis/measurer references, retaining only copied
 label decisions. Mutations made by a measurement callback reject the candidate frame
 instead of stamping stale geometry with a newer document revision.
+
+Source reads during line compilation are captured once, including the cold index key.
+If a custom getter replaces a series source, the revision guard rejects that frame,
+but its old index cannot become attached to the replacement source. A focused test
+requires the next compile to reproduce a fresh compiler's vertices and labels exactly.
